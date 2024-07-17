@@ -6,12 +6,15 @@ _R_B0_N_SIZE = 3
 _Q_NB_SIZE = 4
 _V_B0_N_SIZE = 3
 _OMEGA_B0_B_SIZE = 3
-_state_sizes_cumsum = [i for i in range(0, _R_B0_N_SIZE + _Q_NB_SIZE + _V_B0_N_SIZE + _OMEGA_B0_B_SIZE)]
+_state_sizes_cumsum = [
+    i for i in range(0, _R_B0_N_SIZE + _Q_NB_SIZE + _V_B0_N_SIZE + _OMEGA_B0_B_SIZE)
+]
 
 R_B0_N = _state_sizes_cumsum[0:_R_B0_N_SIZE]
 Q_NB = _state_sizes_cumsum[R_B0_N[-1] + 1 : R_B0_N[-1] + 1 + _Q_NB_SIZE]
 V_B0_N = _state_sizes_cumsum[Q_NB[-1] + 1 : Q_NB[-1] + 1 + _V_B0_N_SIZE]
 OMEGA_B0_B = _state_sizes_cumsum[V_B0_N[-1] + 1 : V_B0_N[-1] + 1 + _OMEGA_B0_B_SIZE]
+
 
 def decompose_state(y: np.ndarray):
     """
@@ -31,8 +34,9 @@ def decompose_state(y: np.ndarray):
     q_NB = y[Q_NB]
     v_b0_N = y[V_B0_N]
     omega_b0_B = y[OMEGA_B0_B]
-    
+
     return r_b0_N, q_NB, v_b0_N, omega_b0_B
+
 
 def decompose_state_dot(ydot: np.ndarray):
     """
@@ -52,13 +56,16 @@ def decompose_state_dot(ydot: np.ndarray):
     q_NB_dot = ydot[Q_NB]
     a_b0_N = ydot[V_B0_N]
     omega_b0_B_dot = ydot[OMEGA_B0_B]
-    
+
     return v_b0_N, q_NB_dot, a_b0_N, omega_b0_B_dot
 
-def compose_state(r_b0_N: np.ndarray = np.zeros(3),
-                  q_NB: np.ndarray = qeye(),
-                  v_b0_N: np.ndarray = np.zeros(3),
-                  omega_b0_B: np.ndarray = np.zeros(3)):
+
+def compose_state(
+    r_b0_N: np.ndarray = np.zeros(3),
+    q_NB: np.ndarray = qeye(),
+    v_b0_N: np.ndarray = np.zeros(3),
+    omega_b0_B: np.ndarray = np.zeros(3),
+):
     """
     Composes the state vector for a system.
 
@@ -79,18 +86,21 @@ def compose_state(r_b0_N: np.ndarray = np.zeros(3),
         - y[10:13] contains the angular velocity vector omega_b0_B.
     """
     y = np.empty(_state_sizes_cumsum[-1] + 1)
-    
+
     y[R_B0_N] = r_b0_N
     y[Q_NB] = q_NB
     y[V_B0_N] = v_b0_N
     y[OMEGA_B0_B] = omega_b0_B
-    
+
     return y
 
-def compose_state_dot(v_b0_N: np.ndarray = np.zeros(3),
-                      q_NB_dot: np.ndarray = np.zeros(3),
-                      a_b0_N: np.ndarray = np.zeros(3),
-                      omega_b0_B_dot: np.ndarray = np.zeros(3)):
+
+def compose_state_dot(
+    v_b0_N: np.ndarray = np.zeros(3),
+    q_NB_dot: np.ndarray = np.zeros(3),
+    a_b0_N: np.ndarray = np.zeros(3),
+    omega_b0_B_dot: np.ndarray = np.zeros(3),
+):
     """
     Composes the state vector derivative for a system.
 
@@ -111,20 +121,21 @@ def compose_state_dot(v_b0_N: np.ndarray = np.zeros(3),
         - ydot[10:13] contains the derivative of the angular velocity vector omega_b0_B.
     """
     ydot = np.empty(_state_sizes_cumsum[-1] + 1)
-    
+
     ydot[R_B0_N] = v_b0_N
     ydot[Q_NB] = q_NB_dot
     ydot[V_B0_N] = a_b0_N
     ydot[OMEGA_B0_B] = omega_b0_B_dot
-    
+
     return ydot
 
+
 # Body axes
-e3_B = np.array([0, 0, 1], dtype=np.float64)        
+e3_B = np.array([0, 0, 1], dtype=np.float64)
 thrust_axis_B = e3_B
 
 # Gravity
-g = -9.8067 # m/s^2 downwards
+g = -9.8067  # m/s^2 downwards
 a_g_N = np.array([0, 0, g])
 
 # Global axes
