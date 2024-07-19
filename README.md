@@ -26,8 +26,8 @@ git clone git@github.com:micahreich/uav_control.git      # for ssh
 Create a Python virtual environment and install dependancies:
 ```bash
 cd uav_control                  
-python -m venv pyenv # create a virtual environment
-pip install -e .     # install requirements
+python -m venv pyenv  # create a virtual environment
+pip install -e .      # install requirements
 ```
 
 Now you can run any of the examples locally.

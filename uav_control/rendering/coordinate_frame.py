@@ -3,8 +3,7 @@ from typing import Optional, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 from hybrid_ode_sim.simulation.base import BaseModel
-from hybrid_ode_sim.simulation.rendering.base import (PlotElement,
-                                                      PlotEnvironment)
+from hybrid_ode_sim.simulation.rendering.base import PlotElement, PlotEnvironment
 from hybrid_ode_sim.utils.logging_tools import Logger, LogLevel
 from matplotlib.animation import FuncAnimation
 from mpl_toolkits.mplot3d import Axes3D

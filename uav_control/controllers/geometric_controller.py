@@ -1,17 +1,24 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 import numpy as np
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
-from spatialmath.base import q2r, qconj, qqmul, qvmul, r2q, skewa
+from spatialmath.base import q2r, qconj, qqmul, qvmul, r2q, skewa, angvec2r
 
-from uav_control.constants import (a_g_N, compose_state_dot, decompose_state,
-                                   e3_B, e3_N, g, thrust_axis_B)
+from uav_control.constants import (
+    a_g_N,
+    compose_state_dot,
+    decompose_state,
+    e3_B,
+    e3_N,
+    g,
+    thrust_axis_B,
+)
 from uav_control.dynamics import QuadrotorRigidBodyParams
 
 
 @dataclass
-class QuadrotorGeometricControllerParams:
+class GeometricControllerParams:
     kP: np.ndarray = field(default_factory=lambda: np.eye(3))  # 3x3 proportional gains
     kD: np.ndarray = field(default_factory=lambda: np.eye(3))  # 3x3 derivative gains
     kR: np.ndarray = field(default_factory=lambda: np.eye(3))  # 3x3 attitude gains
@@ -23,6 +30,25 @@ class QuadrotorGeometricControllerParams:
         default_factory=lambda: np.eye(3)
     )  # inertia matrix of the quadrotor
     # D_drag: np.ndarray = field(default_factory=lambda: np.zeros((3, 3)))  # drag matrix of the quadrotor
+
+
+@dataclass
+class GeometricControllerTiltPrioritizedParams:
+    kP: np.ndarray = field(default_factory=lambda: np.eye(3))  # 3x3 proportional gains
+    kD: np.ndarray = field(default_factory=lambda: np.eye(3))  # 3x3 derivative gains
+    kR_red: np.ndarray = field(
+        default_factory=lambda: np.eye(3)
+    )  # 3x3 reduced attitude gains
+    kR_yaw: np.ndarray = field(
+        default_factory=lambda: np.eye(3)
+    )  # 3x3 yaw attitude gains
+    kOmega: np.ndarray = field(
+        default_factory=lambda: np.eye(3)
+    )  # 3x3 angular velocity gains
+    m: float = 1.0  # mass of the quadrotor
+    I: np.ndarray = field(
+        default_factory=lambda: np.eye(3)
+    )  # inertia matrix of the quadrotor
 
 
 def sign(x):
@@ -56,14 +82,16 @@ def compute_cross_product_dot(u, u_dot, v, v_dot):
     return np.cross(u_dot, v) + np.cross(u, v_dot)
 
 
-class QuadrotorGeometricController(DiscreteTimeModel):
+class GeometricController(DiscreteTimeModel):
     def __init__(
         self,
         y0: np.ndarray,
         sample_rate: int,
-        params=QuadrotorGeometricControllerParams(),
+        params: Union[
+            GeometricControllerParams, GeometricControllerTiltPrioritizedParams
+        ] = GeometricControllerParams(),
     ):
-        """Initializes the QuadrotorGeometricController class.
+        """Initializes the GeometricController class.
 
         This controller is a differential flatness-based controller that tracks desired positions
         (and derivatives) and desired yaw angles (and derivatives).
@@ -77,10 +105,15 @@ class QuadrotorGeometricController(DiscreteTimeModel):
                 - collective_thrust: float, the collective thrust of the quadrotor
                 - torques: 3x1 vector, the torques to be applied to the quadrotor
             sample_rate (int): The sample rate of the controller (Hz).
-            params (QuadrotorGeometricControllerParams, optional): The parameters for the geometric controller.
-                Defaults to QuadrotorGeometricControllerParams().
+            params (GeometricControllerParams, optional): The parameters for the geometric controller.
+                Defaults to GeometricControllerParams().
         """
         super().__init__(y0, sample_rate, "controller", params)
+
+        # Check if using tilt priority or not
+        self.tilt_priority = isinstance(
+            params, GeometricControllerTiltPrioritizedParams
+        )
 
     def discrete_dynamics(self, _t: float, _y: np.ndarray) -> np.ndarray:
         """Calculate the control output of the geometric controller.
@@ -181,18 +214,56 @@ class QuadrotorGeometricController(DiscreteTimeModel):
 
         # Combine orientation, angular velocity errors + ff to get desired torque
         omega_d0_B = rot_NB.T @ rot_ND @ omega_d0_D
-        omega_d0_B_dot = rot_NB.T @ rot_ND @ omega_d0_D_dot
 
-        e_R = 0.5 * vee(rot_ND.T @ rot_NB - rot_NB.T @ rot_ND)
+        # Time derivative of the desired angular velocity in B frame, due to Transport Theorem
+        rot_BD = rot_NB.T @ rot_ND
+        omega_d0_B_dot = rot_BD @ omega_d0_D_dot - np.cross(
+            omega_b0_B, rot_BD @ omega_d0_D
+        )
+
         e_Omega = omega_b0_B - omega_d0_B
 
+        # R_err represents the intrinsic rotation from the D frame to B frame, ie R_B = R_D * R_err
+        rot_err = rot_ND.T @ rot_NB
+
+        if self.tilt_priority:
+            # First calculate reduced rotation error, ie rotation which brings D frame e3 axis to B frame e3 axis
+            # by rotating about the axis e3_D x e3_B (while making sure this axis is represented in the D frame)
+            e3_B_D = rot_ND.T @ rot_NB[:, 2]
+            n = np.cross(e3_N, e3_B_D)
+            theta = np.arccos(np.dot(rot_ND[:, 2], rot_NB[:, 2]))
+
+            if theta < 1e-6:
+                axis = np.array([0, 0, 1])
+                e_R_reduced_D = np.zeros(3)
+            else:
+                axis = n / np.linalg.norm(n)
+                e_R_reduced_D = theta * axis
+
+            rot_err_red_D = angvec2r(theta, axis, unit="rad")
+
+            # Represent reduced error rotation in B frame
+            e_R_reduced = rot_err.T @ e_R_reduced_D
+
+            # Then calculate extrinsic rotation which brings D frame x axis to B frame x axis
+            # by rotating about a fixed D-frame axis, ie R_B = R_{err,yaw} * (R_D * R_{err,reduced})
+            rot_err_yaw_D = rot_NB @ (rot_ND @ rot_err_red_D).T
+            e_R_yaw_D = 0.5 * vee(rot_err_yaw_D - rot_err_yaw_D.T)
+
+            # Represent yaw error rotation in B frame
+            e_R_yaw = rot_err.T @ e_R_yaw_D
+
+            e_R_term = -self.params.kR_red @ e_R_reduced - self.params.kR_yaw @ e_R_yaw
+        else:
+            e_R = 0.5 * vee(rot_err - rot_err.T)
+            e_R_term = -self.params.kR @ e_R
+
         M = (
-            -self.params.kR @ e_R
+            e_R_term
             + -self.params.kOmega @ e_Omega
             + np.cross(omega_b0_B, self.params.I @ omega_b0_B)
             + self.params.I @ omega_d0_B_dot
         )
-        # self.params.I @ np.cross(omega_b0_B, rot_NB.T @ rot_ND @ omega_d0_D) + \
 
         # Stack collective thrust and torques into control output
         control_output = np.hstack((f, M))
