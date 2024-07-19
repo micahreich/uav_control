@@ -5,15 +5,8 @@ import cvxpy as cp
 import numpy as np
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
 
-from uav_control.constants import (
-    a_g_N,
-    compose_state_dot,
-    decompose_state,
-    e3_B,
-    e3_N,
-    g,
-    thrust_axis_B,
-)
+from uav_control.constants import (a_g_N, compose_state_dot, decompose_state,
+                                   e3_B, e3_N, g, thrust_axis_B)
 from uav_control.dynamics import QuadrotorRigidBodyParams
 
 

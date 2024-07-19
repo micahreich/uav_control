@@ -6,7 +6,8 @@ import numpy as np
 import spatialmath as sm
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
 from hybrid_ode_sim.utils.logging_tools import LogLevel
-from spatialmath.base import qconj, qdotb, qnorm, qvmul, rotx, roty, rotz, skewa
+from spatialmath.base import (qconj, qdotb, qnorm, qvmul, rotx, roty, rotz,
+                              skewa)
 
 from uav_control.constants import R_B0_N, V_B0_N, decompose_state, e1_N, e2_N
 

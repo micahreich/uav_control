@@ -3,7 +3,8 @@ from typing import Optional, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 from hybrid_ode_sim.simulation.base import BaseModel
-from hybrid_ode_sim.simulation.rendering.base import PlotElement, PlotEnvironment
+from hybrid_ode_sim.simulation.rendering.base import (PlotElement,
+                                                      PlotEnvironment)
 from hybrid_ode_sim.utils.logging_tools import Logger, LogLevel
 from matplotlib.animation import FuncAnimation
 from mpl_toolkits.mplot3d import Axes3D
@@ -13,16 +14,14 @@ from uav_control.constants import compose_state, decompose_state
 
 
 class TraveledPath(PlotElement):
-    def __init__(
-        self,
-        env: PlotEnvironment,
-        system: BaseModel
-    ):
+    def __init__(self, env: PlotEnvironment, system: BaseModel):
         super().__init__(env, logging_level=LogLevel.ERROR)
 
-        self.trail_plot, = self.env.ax.plot([], [], [], linewidth=1, color='b', alpha=0.5)
+        (self.trail_plot,) = self.env.ax.plot(
+            [], [], [], linewidth=1, color="b", alpha=0.5
+        )
         self.x_history, self.y_history, self.z_history = [], [], []
-        
+
         self.ts, self.ys, self.history = system.history()
 
     def set_plot_xyz(self, plot, x, y, z):
@@ -32,22 +31,24 @@ class TraveledPath(PlotElement):
     def update(self, t):
         try:
             r_b0_N, q_NB, v_b0_N, omega_b0_B = decompose_state(self.history(t))
-            
+
             self.x_history.append(r_b0_N[0])
             self.y_history.append(r_b0_N[1])
             self.z_history.append(r_b0_N[2])
-            
+
             rot_NB = q2r(q_NB)
         except Exception as e:
             self.logger.error(f"Could not decompose state: {e}")
             raise e
-        
-        self.set_plot_xyz(self.trail_plot, self.x_history, self.y_history, self.z_history)
-        
-        return self.trail_plot,
+
+        self.set_plot_xyz(
+            self.trail_plot, self.x_history, self.y_history, self.z_history
+        )
+
+        return (self.trail_plot,)
 
     def reset(self):
         self.x_history, self.y_history, self.z_history = [], [], []
         self.set_plot_xyz(self.trail_plot, [], [], [])
-        
-        return self.trail_plot,
+
+        return (self.trail_plot,)

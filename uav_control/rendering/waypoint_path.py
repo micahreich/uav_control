@@ -2,7 +2,8 @@ from typing import Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-from hybrid_ode_sim.simulation.rendering.base import PlotElement, PlotEnvironment
+from hybrid_ode_sim.simulation.rendering.base import (PlotElement,
+                                                      PlotEnvironment)
 from matplotlib.animation import FuncAnimation
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize

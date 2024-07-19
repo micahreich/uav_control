@@ -3,17 +3,10 @@ from typing import Any, Dict, List, Union
 
 import numpy as np
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
-from spatialmath.base import q2r, qconj, qqmul, qvmul, r2q, skewa, angvec2r
+from spatialmath.base import angvec2r, q2r, qconj, qqmul, qvmul, r2q, skewa
 
-from uav_control.constants import (
-    a_g_N,
-    compose_state_dot,
-    decompose_state,
-    e3_B,
-    e3_N,
-    g,
-    thrust_axis_B,
-)
+from uav_control.constants import (a_g_N, compose_state_dot, decompose_state,
+                                   e3_B, e3_N, g, thrust_axis_B)
 from uav_control.dynamics import QuadrotorRigidBodyParams
 
 
