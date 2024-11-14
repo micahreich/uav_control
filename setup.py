@@ -4,17 +4,11 @@ setup(
     name="uav_control",
     version="0.1",
     packages=find_packages(),
-    install_requires=[
-        "cvxpy==1.5.1",
-        "matplotlib==3.8.3",
-        "numpy==1.26.4",
-        "spatialmath-python==1.1.9",
-        "scipy==1.13.1",
-    ],
+    install_requires=[], # Install requirements with pip install -r requirements.txt
     author="Micah Reich",
     author_email="micahreich02@gmail.com",
     description="UAV simulation and control algorithms from popular research papers implemented in Python",
-    long_description=open("README.md").read(),
+    long_description="",
     long_description_content_type="text/markdown",
     url="https://github.com/micahreich/uav_control",
     classifiers=[

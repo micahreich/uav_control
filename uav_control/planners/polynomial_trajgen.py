@@ -1,8 +1,10 @@
 import math
+from typing import Tuple
 
 import cvxpy as cp
 import numpy as np
 from scipy.linalg import block_diag
+from scipy.optimize import minimize_scalar
 
 
 def _qp_var_indices(segment_index, poly_order, m=0):
@@ -58,17 +60,11 @@ def _qp_constraints(waypoints, times, order=7, n_constrained_end_derivs=2):
         A_seg_next_col_idx0, A_seg_next_col_idxf = _qp_var_indices(i + 1, N, m=1)
 
         poly_deriv_1_coeffs = polyderivs[1]
-        seg_curr_tf_deriv_coeffs = poly_deriv_1_coeffs * (
-            seg_curr_tf ** np.arange(N - 1, -1, -1)
-        )
-        seg_next_t0_deriv_coeffs = poly_deriv_1_coeffs * (
-            seg_next_t0 ** np.arange(N - 1, -1, -1)
-        )
+        seg_curr_tf_deriv_coeffs = poly_deriv_1_coeffs * (seg_curr_tf ** np.arange(N - 1, -1, -1))
+        seg_next_t0_deriv_coeffs = poly_deriv_1_coeffs * (seg_next_t0 ** np.arange(N - 1, -1, -1))
 
         A[row_index, A_seg_curr_col_idx0:A_seg_curr_col_idxf] = seg_curr_tf_deriv_coeffs
-        A[row_index, A_seg_next_col_idx0:A_seg_next_col_idxf] = (
-            -seg_next_t0_deriv_coeffs
-        )
+        A[row_index, A_seg_next_col_idx0:A_seg_next_col_idxf] = -seg_next_t0_deriv_coeffs
         row_index += 1
 
     # Constraint type 3: first and last segment start/end must have zero-value derivatives up to order `n_constrained_end_derivs`
@@ -88,9 +84,7 @@ def _qp_constraints(waypoints, times, order=7, n_constrained_end_derivs=2):
         A_curr_col_idx0, A_curr_col_idxf = _qp_var_indices(seg_index, N, m=deriv_order)
 
         poly_deriv_order_coeffs = polyderivs[deriv_order]
-        t_deriv_coeffs = poly_deriv_order_coeffs * (
-            tf ** np.arange(N - deriv_order, -1, -1)
-        )
+        t_deriv_coeffs = poly_deriv_order_coeffs * (tf ** np.arange(N - deriv_order, -1, -1))
 
         A[row_index, A_curr_col_idx0:A_curr_col_idxf] = t_deriv_coeffs
         row_index += 1
@@ -205,6 +199,23 @@ class PolynomialTrajectoryND:
         # List of coeffs s.t. polynomial_coeffs[i] are coeffs for i^th dimension of waypoint
         self.polynomial_coeffs = self._generate_polynomial_coeffs()
 
+    def closest_waypoint_t(self, r_d: np.ndarray, bounds: Tuple[float, float]) -> float:
+        assert r_d.size == self.dim
+
+        def objective_fn(t) -> Tuple[float, float]:
+            [r, v] = self(t, n_derivatives=1)
+
+            r_error = r_d - r
+            objective_value = np.dot(r_error, r_error)
+
+            return objective_value
+
+        minimize_result = minimize_scalar(fun=objective_fn, method="bounded", bounds=bounds)
+        if minimize_result.success:
+            return minimize_result.x
+        else:
+            raise RuntimeError("Optimization failed to find closest waypoint time")
+
     def _generate_polynomial_coeffs(self):
         return np.array(
             [
@@ -236,9 +247,7 @@ class PolynomialTrajectoryND:
 
         for i in range(n_derivatives + 1):
             coeffs_idx0, coeffs_idxf = _qp_var_indices(segment_index, self.order, m=i)
-            coeffs = (
-                self.polynomial_coeffs[:, coeffs_idx0:coeffs_idxf] * self.polyderivs[i]
-            )
+            coeffs = self.polynomial_coeffs[:, coeffs_idx0:coeffs_idxf] * self.polyderivs[i]
 
             ret[i] = coeffs @ t_powers[i:]
 

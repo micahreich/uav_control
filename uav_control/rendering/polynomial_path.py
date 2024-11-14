@@ -2,8 +2,8 @@ from typing import Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-from hybrid_ode_sim.simulation.rendering.base import (PlotElement,
-                                                      PlotEnvironment)
+from hybrid_ode_sim.simulation.rendering.base import PlotElement, PlotEnvironment
+from hybrid_ode_sim.utils.logging_tools import Logger, LogLevel
 from matplotlib.animation import FuncAnimation
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
@@ -17,37 +17,43 @@ from uav_control.constants import compose_state, decompose_state
 class PolynomialTrajectory(PlotElement):
     def __init__(
         self,
-        env: PlotEnvironment,
         polytraj,
         path_t_eval_range: Optional[Tuple[float, float]] = None,
         color_velocities=True,
         plot_waypoints=True,
+        env: Optional[PlotEnvironment] = None,
     ):
-        super().__init__(env)
+        super().__init__(env, logging_level=LogLevel.ERROR)
 
-        if path_t_eval_range is None:
-            ts = np.linspace(*self.env.t_range, polytraj.n_segments * 150)
+        self.polytraj = polytraj
+        self.path_t_eval_range = path_t_eval_range
+        self.color_velocities = color_velocities
+        self.plot_waypoints = plot_waypoints
+
+    def init_environment(self, env):
+        super().init_environment(env)
+
+        if self.path_t_eval_range is None:
+            ts = np.linspace(*self.env.t_range, self.polytraj.n_segments * 150)
         else:
-            ts = np.linspace(*path_t_eval_range, polytraj.n_segments * 150)
+            ts = np.linspace(*self.path_t_eval_range, self.polytraj.n_segments * 150)
 
         positions = np.empty(shape=(len(ts), 3))
         velocity_norms = np.empty(shape=(len(ts),))
 
         for i, t in enumerate(ts):
-            r, v = polytraj(t, n_derivatives=1)
+            r, v = self.polytraj(t, n_derivatives=1)
             positions[i] = r
             velocity_norms[i] = np.linalg.norm(v)
 
-        if color_velocities:
+        if self.color_velocities:
             # Define 3D points and segments
             points = positions.reshape(-1, 1, 3)
             segments = np.concatenate([points[:-1], points[1:]], axis=1)
 
             # Create a continuous norm to map from data points to colors
             norm = Normalize(velocity_norms.min(), velocity_norms.max())
-            lc = Line3DCollection(
-                segments, linewidths=1.0, cmap="gist_rainbow", norm=norm
-            )
+            lc = Line3DCollection(segments, linewidths=1.0, cmap="gist_rainbow", norm=norm)
 
             # Set the values used for colormapping
             lc.set_array(velocity_norms)
@@ -70,11 +76,11 @@ class PolynomialTrajectory(PlotElement):
             )
 
         # Plot waypoints of the trajectory
-        if plot_waypoints:
+        if self.plot_waypoints:
             self.env.ax.scatter(
-                polytraj.waypoints[:, 0],
-                polytraj.waypoints[:, 1],
-                polytraj.waypoints[:, 2],
+                self.polytraj.waypoints[:, 0],
+                self.polytraj.waypoints[:, 1],
+                self.polytraj.waypoints[:, 2],
                 color="black",
                 alpha=0.6,
                 s=10,
@@ -83,7 +89,9 @@ class PolynomialTrajectory(PlotElement):
 
 if __name__ == "__main__":
     from hybrid_ode_sim.systems.polynomial_trajgen import (
-        PolynomialTrajectoryND, visualize_spatial_trajectory)
+        PolynomialTrajectoryND,
+        visualize_spatial_trajectory,
+    )
 
     # n_points = 4
     # times = np.arange(n_points, dtype=np.float64)

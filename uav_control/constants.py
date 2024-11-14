@@ -2,18 +2,24 @@ import numpy as np
 from spatialmath.base import qeye
 
 # Helpers used to index into the state vector
-_R_B0_N_SIZE = 3
-_Q_NB_SIZE = 4
-_V_B0_N_SIZE = 3
-_OMEGA_B0_B_SIZE = 3
-_state_sizes_cumsum = [
-    i for i in range(0, _R_B0_N_SIZE + _Q_NB_SIZE + _V_B0_N_SIZE + _OMEGA_B0_B_SIZE)
-]
+R_B0_N_DIM = 3
+Q_NB_DIM = 4
+V_B0_N_DIM = 3
+OMEGA_B0_B_DIM = 3
+_state_sizes_cumsum = [i for i in range(0, R_B0_N_DIM + Q_NB_DIM + V_B0_N_DIM + OMEGA_B0_B_DIM)]
 
-R_B0_N = _state_sizes_cumsum[0:_R_B0_N_SIZE]
-Q_NB = _state_sizes_cumsum[R_B0_N[-1] + 1 : R_B0_N[-1] + 1 + _Q_NB_SIZE]
-V_B0_N = _state_sizes_cumsum[Q_NB[-1] + 1 : Q_NB[-1] + 1 + _V_B0_N_SIZE]
-OMEGA_B0_B = _state_sizes_cumsum[V_B0_N[-1] + 1 : V_B0_N[-1] + 1 + _OMEGA_B0_B_SIZE]
+# Helpers used to index into the control vector
+THRUST_DIM = 1
+TAU_B0_B_DIM = 3
+_control_sizes_cumsum = [i for i in range(0, THRUST_DIM + TAU_B0_B_DIM)]
+
+R_B0_N = _state_sizes_cumsum[0:R_B0_N_DIM]
+Q_NB = _state_sizes_cumsum[R_B0_N[-1] + 1 : R_B0_N[-1] + 1 + Q_NB_DIM]
+V_B0_N = _state_sizes_cumsum[Q_NB[-1] + 1 : Q_NB[-1] + 1 + V_B0_N_DIM]
+OMEGA_B0_B = _state_sizes_cumsum[V_B0_N[-1] + 1 : V_B0_N[-1] + 1 + OMEGA_B0_B_DIM]
+
+THRUST = _control_sizes_cumsum[0:THRUST_DIM]
+TAU_B0_B = _control_sizes_cumsum[THRUST[-1] + 1 : THRUST[-1] + 1 + TAU_B0_B_DIM]
 
 
 def decompose_state(y: np.ndarray):
@@ -58,6 +64,28 @@ def decompose_state_dot(ydot: np.ndarray):
     omega_b0_B_dot = ydot[OMEGA_B0_B]
 
     return v_b0_N, q_NB_dot, a_b0_N, omega_b0_B_dot
+
+
+def decompose_control(u: np.ndarray):
+    """
+    Decomposes the control vector into individual sub-arrays
+
+    Parameters
+    ----------
+    u : np.ndarray
+        Stacked control vector
+
+    Returns
+    -------
+    thrust : float
+        The collective thrust from the rotors (Force)
+    tau_b0_B: : np.ndarray
+        The torque exterted on the body-frame expressed from an observer in the body frame
+    """
+    thrust = u[THRUST][0]
+    tau_b0_B = u[TAU_B0_B]
+
+    return thrust, tau_b0_B
 
 
 def compose_state(
@@ -130,15 +158,36 @@ def compose_state_dot(
     return ydot
 
 
+def compose_control(c: float = 0.0, tau_b0_B: np.ndarray = np.zeros(3)):
+    """
+    Composes the stacked control vector for a quadrotor
+
+    Parameters
+    ----------
+    c : float, optional
+        Collective thrust, by default 0.0
+    tau_b0_B : np.ndarray, optional
+        Torque exterted on the body as observed by an observer in the body-frame, by default np.zeros(3)
+
+    Returns
+    -------
+    u : np.ndarray
+        The stacked control vector as a np array
+    """
+    u = np.empty(_control_sizes_cumsum[-1] + 1)
+    u[THRUST] = c
+    u[TAU_B0_B] = tau_b0_B
+
+    return u
+
+
 # Body axes
-e3_B = np.array([0, 0, 1], dtype=np.float64)
-thrust_axis_B = e3_B
+e1 = np.array([1, 0, 0], dtype=np.float64)
+e2 = np.array([0, 1, 0], dtype=np.float64)
+e3 = np.array([0, 0, 1], dtype=np.float64)
+
+thrust_axis_B = e3
 
 # Gravity
 g = -9.8067  # m/s^2 downwards
 a_g_N = np.array([0, 0, g])
-
-# Global axes
-e1_N = np.array([1, 0, 0], dtype=np.float64)
-e2_N = np.array([0, 1, 0], dtype=np.float64)
-e3_N = np.array([0, 0, 1], dtype=np.float64)

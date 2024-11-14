@@ -2,8 +2,8 @@ from typing import Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-from hybrid_ode_sim.simulation.rendering.base import (PlotElement,
-                                                      PlotEnvironment)
+from hybrid_ode_sim.simulation.rendering.base import PlotElement, PlotEnvironment
+from hybrid_ode_sim.utils.logging_tools import Logger, LogLevel
 from matplotlib.animation import FuncAnimation
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
@@ -15,24 +15,35 @@ from uav_control.constants import compose_state, decompose_state
 
 
 class WaypointTrajectory(PlotElement):
-    def __init__(self, env: PlotEnvironment, waypoints, waypoint_color="black"):
-        super().__init__(env)
+    def __init__(
+        self,
+        waypoints,
+        waypoint_color="black",
+        env: Optional[PlotEnvironment] = None,
+    ):
+        super().__init__(env, logging_level=LogLevel.ERROR)
 
-        text_expansion = 0.35
+        self.text_expansion = 0.35
+        self.waypoints = waypoints
+        self.waypoint_color = waypoint_color
 
-        for i, w in enumerate(waypoints):
+    def init_environment(self, env):
+        super().init_environment(env)
+
+        for i, w in enumerate(self.waypoints):
             self.env.ax.text(
-                w[0] + text_expansion,
-                w[1] + text_expansion,
-                w[2] + text_expansion,
+                w[0] + self.text_expansion,
+                w[1] + self.text_expansion,
+                w[2] + self.text_expansion,
                 f"{i}",
-                color=waypoint_color,
+                color=self.waypoint_color,
                 fontsize=10,
                 fontfamily="monospace",
                 va="center",
                 ha="center",
             )
-            self.env.ax.scatter(w[0], w[1], w[2], color=waypoint_color, alpha=0.6, s=10)
+
+            self.env.ax.scatter(w[0], w[1], w[2], color=self.waypoint_color, alpha=0.6, s=10)
 
 
 if __name__ == "__main__":

@@ -5,16 +5,13 @@ import cvxpy as cp
 import numpy as np
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
 
-from uav_control.constants import (a_g_N, compose_state_dot, decompose_state,
-                                   e3_B, e3_N, g, thrust_axis_B)
+from uav_control.constants import a_g_N, compose_state_dot, decompose_state, e3, g, thrust_axis_B
 from uav_control.dynamics import QuadrotorRigidBodyParams
 
 
 @dataclass
 class QuadrotorQPAllocatorParams:
-    W: np.ndarray = field(
-        default_factory=lambda: np.eye(4)
-    )  # 4x4 diagonal weight matrix
+    W: np.ndarray = field(default_factory=lambda: np.eye(4))  # 4x4 diagonal weight matrix
     l: float = 0.2  # arm length
     u_min: float = 0.0  # minimum rotor thrust
     u_max: float = np.inf  # maximum rotor thrust
@@ -22,9 +19,7 @@ class QuadrotorQPAllocatorParams:
 
 
 class QuadrotorQPAllocator(DiscreteTimeModel):
-    def __init__(
-        self, y0: np.ndarray, sample_rate: int, params=QuadrotorQPAllocatorParams()
-    ):
+    def __init__(self, y0: np.ndarray, sample_rate: int, params=QuadrotorQPAllocatorParams()):
         """
         Initialize the QP-based control allocator. Solves the following optimization problem:
 
@@ -52,7 +47,7 @@ class QuadrotorQPAllocator(DiscreteTimeModel):
                 self.params.l * np.array([0.0, -1.0, 0.0]),
             ]
         ):
-            self.G1[1:, i] = np.cross(r, e3_B)
+            self.G1[1:, i] = np.cross(r, e3)
 
         self.G1[3, :] += [
             self.params.cq_ct_ratio,

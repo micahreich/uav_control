@@ -6,10 +6,9 @@ import numpy as np
 import spatialmath as sm
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
 from hybrid_ode_sim.utils.logging_tools import LogLevel
-from spatialmath.base import (qconj, qdotb, qnorm, qvmul, rotx, roty, rotz,
-                              skewa)
+from spatialmath.base import qconj, qdotb, qnorm, qvmul, rotx, roty, rotz, skewa
 
-from uav_control.constants import R_B0_N, V_B0_N, decompose_state, e1_N, e2_N
+from uav_control.constants import R_B0_N, V_B0_N, decompose_state, e1, e2
 
 
 @dataclass
@@ -19,9 +18,7 @@ class QuadrotorWaypointPlannerParams:
 
 
 class QuadrotorWaypointPlanner(DiscreteTimeModel):
-    def __init__(
-        self, y0: Any, sample_rate: int, params: QuadrotorWaypointPlannerParams
-    ):
+    def __init__(self, y0: Any, sample_rate: int, params: QuadrotorWaypointPlannerParams):
         """
         Initializes a QuadrotorWaypointPlanner object. Given some waypoints and times, the planner will
         switch between tracking the next desired waypoint based on the current time.
@@ -31,10 +28,8 @@ class QuadrotorWaypointPlanner(DiscreteTimeModel):
             sample_rate (int): The frequency (in Hz) at which the planner updates.
             params (QuadrotorWaypointPlannerParams): Configuration parameters including waypoint positions and times.
         """
-        super().__init__(
-            y0, sample_rate, "dfb_planner", params, logging_level=LogLevel.INFO
-        )
-        self.b1d_prev = e1_N
+        super().__init__(y0, sample_rate, "waypoint_planner", params, logging_level=LogLevel.INFO)
+        self.b1d_prev = e1
 
     def discrete_dynamics(self, t: float, _y: Any) -> Any:
         """
@@ -53,9 +48,7 @@ class QuadrotorWaypointPlanner(DiscreteTimeModel):
         dynamics = self.input_models["quadrotor_state"]
         r_b0_N, _, _, _ = decompose_state(dynamics.y)
 
-        t_verified = np.clip(
-            t, self.params.waypoint_times[0], self.params.waypoint_times[-1]
-        )
+        t_verified = np.clip(t, self.params.waypoint_times[0], self.params.waypoint_times[-1])
         idx = np.searchsorted(self.params.waypoint_times, t_verified, side="left")
 
         planar_projection = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 0]])

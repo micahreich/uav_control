@@ -6,25 +6,27 @@ import numpy as np
 import spatialmath as sm
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
 from hybrid_ode_sim.utils.logging_tools import LogLevel
-from spatialmath.base import (qconj, qdotb, qnorm, qvmul, rotx, roty, rotz,
-                              skewa)
+from spatialmath.base import qconj, qdotb, qnorm, qvmul, rotx, roty, rotz, skewa
 
-from uav_control.constants import R_B0_N, V_B0_N, e1_N
-from uav_control.controllers.geometric_controller import (
-    compute_unit_vector_ddot, compute_unit_vector_dot)
+from uav_control.constants import R_B0_N, V_B0_N, decompose_state, e1
 from uav_control.planners.polynomial_trajgen import PolynomialTrajectoryND
+from uav_control.utils.math import compute_unit_vector_ddot, compute_unit_vector_dot
+
+
+class TrackingType(Enum):
+    SPATIAL_TRACKING = 0
+    TEMPORAL_TRACKING = 1
 
 
 @dataclass
 class QuadrotorPolynomialPlannerParams:
     waypoint_positions: np.ndarray  # waypoints to visit
     waypoint_times: np.ndarray  # times to reach each waypoint
+    tracking_type: TrackingType = TrackingType.TEMPORAL_TRACKING
 
 
 class QuadrotorPolynomialPlanner(DiscreteTimeModel):
-    def __init__(
-        self, y0: Any, sample_rate: int, params: QuadrotorPolynomialPlannerParams
-    ):
+    def __init__(self, y0: Any, sample_rate: int, params: QuadrotorPolynomialPlannerParams):
         """
         Initializes the QuadrotorPolynomialPlanner which is responsible for generating a minimum-snap polynomial trajectory for a quadrotor.
         This planner uses the provided initial state, sample rate, and parameters to create a trajectory based on waypoints and timepoints.
@@ -33,14 +35,18 @@ class QuadrotorPolynomialPlanner(DiscreteTimeModel):
             Minimum snap trajectory generation and control for quadrotors
             https://ieeexplore.ieee.org/document/5980409
 
-        Args:
-            y0 (Any): The initial state of the quadrotor system.
-            sample_rate (int): The frequency (in Hz) at which the planner updates.
-            params (QuadrotorPolynomialPlannerParams): Configuration parameters including waypoint positions and times.
+        Parameters
+        ----------
+        y0 : Any
+            The initial state of the quadrotor system.
+        sample_rate : int
+            The frequency (in Hz) at which the planner updates.
+        params : QuadrotorPolynomialPlannerParams
+            Configuration parameters including waypoint positions and times. Temporal tracking is the default tracking type,
+            which means the planner will follow the trajectory based on the current time. Spatial tracking will follow the trajectory
+            based on the closest waypoint to the current position.
         """
-        super().__init__(
-            y0, sample_rate, "dfb_planner", params, logging_level=LogLevel.INFO
-        )
+        super().__init__(y0, sample_rate, "polynomial_planner", params, logging_level=LogLevel.INFO)
 
         self.polynomial_traj = PolynomialTrajectoryND(
             waypoints=params.waypoint_positions,
@@ -50,96 +56,61 @@ class QuadrotorPolynomialPlanner(DiscreteTimeModel):
             minimize_order=2,
         )
 
+        if self.params.tracking_type == TrackingType.SPATIAL_TRACKING:
+            self.closest_t_prev = params.waypoint_times[0]
+
         self.b1d_prev, self.b1d_dot_prev, self.b1d_ddot_prev = (
-            e1_N,
+            e1,
             np.zeros(3),
             np.zeros(3),
         )
 
-    def search_nearest_point(self, state: np.ndarray, t0):
-        def grad(t):
-            r_t, v_t = self.polynomial_traj(t, n_derivatives=1)
-            return 2.0 * np.dot(r_t - state[R_B0_N], v_t)
+        # Log an info message with the initialized parameters and tracker type
+        info_message = (
+            f"QuadrotorPolynomialPlanner initialized with {params.tracking_type} tracking:\n"
+        )
+        for i, (waypoint, timepoint) in enumerate(
+            zip(params.waypoint_positions, params.waypoint_times)
+        ):
+            info_message += f"\tWaypoint {i+1}: {waypoint} @ t={timepoint:.1}s\n"
 
-        def objective(t):
-            r_t = self.polynomial_traj(t, n_derivatives=0)
-            return np.linalg.norm(r_t - state[R_B0_N]) ** 2
-
-        t = t0
-
-        for _ in range(100):
-            gradient_eval, objective_eval = grad(t), objective(t)
-
-            if np.allclose(gradient_eval, 0.0, atol=1e-6):
-                gradient_eval = 2 * (np.random.rand() - 0.5) * 1e-6
-
-            t_new = t - objective_eval / gradient_eval
-            t_new = np.clip(
-                t_new,
-                self.polynomial_traj.timepoints[0],
-                self.polynomial_traj.timepoints[-1],
-            )
-
-            if np.abs(t_new - t) < 1e-6:
-                break
-
-            t = t_new
-
-        return t
-
-        # t = t0 # Initial guess
-        # grad_accum = 0.0 # Accumulated gradient
-        # learning_rate = 0.5
-
-        # grad_magnitude_eps = 1e-6 # Stopping criterion, gradient magnitude
-        # max_iters = 200
-
-        # def grad(t):
-        #     r_t, v_t = self.polynomial_traj(t, n_derivatives=1)
-        #     return 2.0 * np.dot(r_t - state[R_B0_N], v_t)
-
-        # def objective(t):
-        #     r_t = self.polynomial_traj(t, n_derivatives=0)
-        #     return np.linalg.norm(r_t - state[R_B0_N]) ** 2
-
-        # for i in range(max_iters):
-        #     dJdt = grad(t)
-        #     grad_accum += dJdt**2
-
-        #     adjusted_lr = learning_rate / (np.sqrt(grad_accum) + 1e-6)
-
-        #     if np.linalg.norm(dJdt) < 1e-6:
-        #         t += learning_rate
-        #     else:
-        #         t += -adjusted_lr * dJdt
-
-        #     if np.linalg.norm(dJdt) < grad_magnitude_eps:
-        #         self.logger.info(f"Converged in {i} iterations")
-        #         break
-        #     else:
-        #         t = t_new
-
-        # self.logger.info(f"Final t: {t}, objective: {objective(t)}")
-        # return t
+        self.logger.info(info_message)
 
     def discrete_dynamics(self, t: float, _y: Any) -> Any:
         """
         Returns the translational setpoints and desired 1st-body-axis direction at the current time.
 
-        Args:
-            t (float): The current time.
-            _y (Any): Not applicable.
+        Parameters
+        ----------
+        t : float
+            Current simulation time
+        _y : Any
+            N/A
 
-        Returns:
-            List[np.ndarray], List[np.ndarray]:
-                - The desired position, velocity, acceleration, jerk, and snap.
-                - The desired 1st-body-axis direction and its 1st, 2nd derivatives.
+        Returns
+        -------
+        List[np.ndarray], List[np.ndarray]:
+            The desired position, velocity, acceleration, jerk, and snap.
+            The desired 1st-body-axis direction and its 1st, 2nd derivatives.
         """
-        state = self.input_models["quadrotor_state"].y
-        t_nearest = t
 
-        [r_b0_N_ref, v_b0_N_ref, a_b0_N_ref, j_b0_N_ref, s_b0_N_ref] = (
-            self.polynomial_traj(t_nearest, n_derivatives=4)
+        dynamics = self.input_models["quadrotor_state"]
+        r_b0_N, q_NB, _v_b0_N, _omega_b0_B = decompose_state(dynamics.y)
+
+        if self.params.tracking_type == TrackingType.SPATIAL_TRACKING:
+            try:
+                t_eval = self.polynomial_traj.closest_waypoint_t(
+                    r_d=r_b0_N, bounds=(self.closest_t_prev, self.params.waypoint_times[-1])
+                )
+                self.closest_t_prev = t_eval
+            except RuntimeError:
+                self.logger.warning("No closest point found. Using previous closest point.")
+                t_eval = self.closest_t_prev
+        elif self.params.tracking_type == TrackingType.TEMPORAL_TRACKING:
+            t_eval = t
+
+        [r_b0_N_ref, v_b0_N_ref, a_b0_N_ref, j_b0_N_ref, s_b0_N_ref] = self.polynomial_traj(
+            t=t_eval, n_derivatives=4
         )
 
         v_b0_N_ref_planar = v_b0_N_ref[0:2]

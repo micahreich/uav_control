@@ -3,8 +3,7 @@ from typing import Optional, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 from hybrid_ode_sim.simulation.base import BaseModel
-from hybrid_ode_sim.simulation.rendering.base import (PlotElement,
-                                                      PlotEnvironment)
+from hybrid_ode_sim.simulation.rendering.base import PlotElement, PlotEnvironment
 from hybrid_ode_sim.utils.logging_tools import Logger, LogLevel
 from matplotlib.animation import FuncAnimation
 from mpl_toolkits.mplot3d import Axes3D
@@ -107,9 +106,9 @@ class CoordinateFrame(PlotElement):
         self.frame_y_vec.set_segments([[r_b0_N, y_vec_endpt]])
         self.frame_z_vec.set_segments([[r_b0_N, z_vec_endpt]])
 
-        text_locations = (
-            rot_NB @ np.array([[1.2, 0, 0], [0, 1.2, 0], [0, 0, 1.2]]).T
-        ) + r_b0_N[:, None]
+        text_locations = (rot_NB @ np.array([[1.2, 0, 0], [0, 1.2, 0], [0, 0, 1.2]]).T) + r_b0_N[
+            :, None
+        ]
         self.set_text_location(text_locations)
 
         return (
@@ -143,10 +142,7 @@ if __name__ == "__main__":
     )
 
     ys = np.array(
-        [
-            compose_state(r_b0_N=R @ np.array([1.0, 0.0, 0.0]), q_NB=r2q(R))
-            for R in orientations
-        ]
+        [compose_state(r_b0_N=R @ np.array([1.0, 0.0, 0.0]), q_NB=r2q(R)) for R in orientations]
     )
 
     def system_history_fn(t):
@@ -160,19 +156,13 @@ if __name__ == "__main__":
         scale_prev = (ts[i_next] - t) / (ts[i_next] - ts[i_prev])
         scale_next = 1.0 - scale_prev
 
-        r_b0_N_prev, q_NB_prev, v_b0_N_prev, omega_b0_B_prev = decompose_state(
-            ys[i_prev]
-        )
-        r_b0_N_next, q_NB_next, v_b0_N_next, omega_b0_B_next = decompose_state(
-            ys[i_next]
-        )
+        r_b0_N_prev, q_NB_prev, v_b0_N_prev, omega_b0_B_prev = decompose_state(ys[i_prev])
+        r_b0_N_next, q_NB_next, v_b0_N_next, omega_b0_B_next = decompose_state(ys[i_next])
         qnm = qunit(qslerp(q_NB_prev, q_NB_next, s=scale_next, shortest=True))
 
         return compose_state(r_b0_N=qvmul(qnm, np.array([1, 0, 0])), q_NB=qnm)
 
     env = PlotEnvironment(fig, ax, sim_t_range=[0.0, 4.0], frame_rate=60)
-    coordinate_frame = CoordinateFrame(
-        env, system=None, _debug_history=(ts, ys, system_history_fn)
-    )
+    coordinate_frame = CoordinateFrame(env, system=None, _debug_history=(ts, ys, system_history_fn))
 
     env.render(plot_elements=[coordinate_frame])
