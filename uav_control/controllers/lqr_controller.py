@@ -7,62 +7,25 @@ import sympy as sym
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
 from hybrid_ode_sim.utils.logging_tools import LogLevel
 from numpy import cos, sin
-from spatialmath.base import (
-    angvec2r,
-    angvelxform,
-    exp2r,
-    norm,
-    q2r,
-    qconj,
-    qnorm,
-    qqmul,
-    qvmul,
-    r2q,
-    r2x,
-    skew,
-)
+from spatialmath.base import (angvec2r, angvelxform, exp2r, norm, q2r, qconj,
+                              qnorm, qqmul, qvmul, r2q, r2x, skew)
 
 import uav_control.constants as constants
-from uav_control.constants import (
-    OMEGA_B0_B,
-    OMEGA_B0_B_DIM,
-    Q_NB,
-    Q_NB_DIM,
-    R_B0_N,
-    R_B0_N_DIM,
-    TAU_B0_B,
-    TAU_B0_B_DIM,
-    THRUST,
-    THRUST_DIM,
-    V_B0_N,
-    V_B0_N_DIM,
-    a_g_N,
-    compose_state,
-    compose_state_dot,
-    decompose_control,
-    decompose_state,
-    e3,
-    g,
-    thrust_axis_B,
-)
-from uav_control.dynamics import QuadrotorRigidBodyDynamics, QuadrotorRigidBodyParams
-from uav_control.utils.math import (
-    aa_to_dcm,
-    compute_cross_product_dot,
-    compute_unit_vector_ddot,
-    compute_unit_vector_dot,
-    dxnorm_dx_jacobian,
-    dxu_dx_jacobian,
-    qu_to_aa,
-    qu_to_rodgigues_params,
-    sym_Aq,
-    sym_Gq,
-    sym_H,
-    sym_Lq,
-    sym_Rq,
-    sym_skewsym,
-    vee,
-)
+from uav_control.constants import (OMEGA_B0_B, OMEGA_B0_B_DIM, Q_NB, Q_NB_DIM,
+                                   R_B0_N, R_B0_N_DIM, TAU_B0_B, TAU_B0_B_DIM,
+                                   THRUST, THRUST_DIM, V_B0_N, V_B0_N_DIM,
+                                   a_g_N, compose_state, compose_state_dot,
+                                   decompose_control, decompose_state, e3, g,
+                                   thrust_axis_B)
+from uav_control.dynamics import (QuadrotorRigidBodyDynamics,
+                                  QuadrotorRigidBodyParams)
+from uav_control.utils.math import (aa_to_dcm, compute_cross_product_dot,
+                                    compute_unit_vector_ddot,
+                                    compute_unit_vector_dot,
+                                    dxnorm_dx_jacobian, dxu_dx_jacobian,
+                                    qu_to_aa, qu_to_rodgigues_params, sym_Aq,
+                                    sym_Gq, sym_H, sym_Lq, sym_Rq, sym_skewsym,
+                                    vee)
 
 nx, nu = 12, 4
 
@@ -109,8 +72,9 @@ class LQRDynamicsLinearization(DiscreteTimeModel):
         params: LQRControllerParams,
         rbd_params: QuadrotorRigidBodyParams,
         y0=None,
+        name: str = "lqr_linearization",
     ):
-        super().__init__(y0, sample_rate, "lqr_linearization", params)
+        super().__init__(y0, sample_rate, name, params)
         self.rbd_params = rbd_params
 
     def _linearize_dynamics(self, x0, u0) -> Tuple[np.ndarray, np.ndarray]:

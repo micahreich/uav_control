@@ -3,41 +3,23 @@ from typing import Tuple
 
 import numpy as np
 import sympy as sym
-from hybrid_ode_sim.simulation.base import ContinuousTimeModel, DiscreteTimeModel
+from hybrid_ode_sim.simulation.base import (ContinuousTimeModel,
+                                            DiscreteTimeModel)
 from hybrid_ode_sim.utils.logging_tools import LogLevel
 from scipy.interpolate import interp1d
-from spatialmath.base import q2r, qconj, qdotb, qnorm, qslerp, qunit, qvmul, skewa
+from spatialmath.base import (q2r, qconj, qdotb, qnorm, qslerp, qunit, qvmul,
+                              skewa)
 
 import uav_control.constants as constants
-from uav_control.constants import (
-    OMEGA_B0_B,
-    Q_NB,
-    R_B0_N,
-    TAU_B0_B,
-    THRUST,
-    V_B0_N,
-    a_g_N,
-    compose_control,
-    compose_state,
-    compose_state_dot,
-    decompose_control,
-    decompose_state,
-    e3,
-    thrust_axis_B,
-)
-from uav_control.utils.math import (
-    compute_cross_product_dot,
-    compute_unit_vector_ddot,
-    compute_unit_vector_dot,
-    dqu_dq_jacobian,
-    sym_Aq,
-    sym_Gq,
-    sym_H,
-    sym_Lq,
-    sym_Rq,
-    sym_skewsym,
-    vee,
-)
+from uav_control.constants import (OMEGA_B0_B, Q_NB, R_B0_N, TAU_B0_B, THRUST,
+                                   V_B0_N, a_g_N, compose_control,
+                                   compose_state, compose_state_dot,
+                                   decompose_control, decompose_state, e3,
+                                   thrust_axis_B)
+from uav_control.utils.math import (compute_cross_product_dot,
+                                    compute_unit_vector_ddot,
+                                    compute_unit_vector_dot, sym_Aq, sym_Gq,
+                                    sym_H, sym_Lq, sym_Rq, sym_skewsym, vee)
 
 p_dim, v_dim, omega_dim, tau_dim = 3, 3, 3, 3  # Position, velocity, angular velocity, torque
 c_dim = 1  # Collective thrust

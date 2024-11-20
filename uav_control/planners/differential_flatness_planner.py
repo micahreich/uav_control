@@ -5,15 +5,24 @@ import numpy as np
 import spatialmath as sm
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
 from hybrid_ode_sim.utils.logging_tools import LogLevel
-from spatialmath.base import q2r, qconj, qdotb, qnorm, qvmul, r2q, rotx, roty, rotz, skewa
+from spatialmath.base import (q2r, qconj, qdotb, qnorm, qvmul, r2q, rotx, roty,
+                              rotz, skewa)
 
-from uav_control.constants import R_B0_N, V_B0_N, a_g_N, compose_control, compose_state, e1
+from uav_control.constants import (R_B0_N, V_B0_N, a_g_N, compose_control,
+                                   compose_state, e1)
 from uav_control.controllers.geometric_controller import decompose_state
 
 
 class DifferentialFlatnessPlanner(DiscreteTimeModel):
-    def __init__(self, sample_rate: int, planner_name: str, y0: Any = None):
-        super().__init__(y0, sample_rate, "dfb_planner", None, logging_level=LogLevel.INFO)
+    def __init__(
+        self,
+        sample_rate: int,
+        planner_name: str,
+        name: str = "dfb_planner",
+        y0: Any = None,
+        logging_level: LogLevel = LogLevel.ERROR,
+    ):
+        super().__init__(y0, sample_rate, name, None, logging_level=logging_level)
         self.planner_name = planner_name
 
     def discrete_dynamics(self, t: float, y: Any) -> Any:

@@ -3,9 +3,11 @@ from typing import Any, Dict, List, Union
 
 import numpy as np
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
+from hybrid_ode_sim.utils.logging_tools import LogLevel
 from spatialmath.base import angvec2r, q2r, qconj, qqmul, qvmul, r2q, skewa
 
-from uav_control.constants import a_g_N, compose_state_dot, decompose_state, e3, g, thrust_axis_B
+from uav_control.constants import (a_g_N, compose_state_dot, decompose_state,
+                                   e3, g, thrust_axis_B)
 from uav_control.dynamics import QuadrotorRigidBodyParams
 from uav_control.utils.math import vee
 
@@ -35,6 +37,8 @@ class GeometricController(DiscreteTimeModel):
         params: Union[GeometricControllerParams, GeometricControllerTiltPrioritizedParams],
         rbd_params: QuadrotorRigidBodyParams,
         planner_name: str,
+        name: str = "controller",
+        logging_level: LogLevel = LogLevel.ERROR,
     ):
         """Initializes the GeometricController class.
 
@@ -53,7 +57,7 @@ class GeometricController(DiscreteTimeModel):
             params (GeometricControllerParams, optional): The parameters for the geometric controller.
                 Defaults to GeometricControllerParams().
         """
-        super().__init__(y0, sample_rate, "controller", params)
+        super().__init__(y0, sample_rate, name, params, logging_level)
         self.rbd_params = rbd_params
 
         # Check if using tilt priority or not

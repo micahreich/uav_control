@@ -6,7 +6,8 @@ import numpy as np
 import spatialmath as sm
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
 from hybrid_ode_sim.utils.logging_tools import LogLevel
-from spatialmath.base import qconj, qdotb, qnorm, qvmul, rotx, roty, rotz, skewa
+from spatialmath.base import (qconj, qdotb, qnorm, qvmul, rotx, roty, rotz,
+                              skewa)
 
 from uav_control.constants import R_B0_N, V_B0_N, decompose_state, e1, e2
 
@@ -18,7 +19,14 @@ class QuadrotorStabilizationPlannerParams:
 
 
 class QuadrotorStabilizationPlanner(DiscreteTimeModel):
-    def __init__(self, y0: Any, sample_rate: int, params: QuadrotorStabilizationPlannerParams):
+    def __init__(
+        self,
+        y0: Any,
+        sample_rate: int,
+        params: QuadrotorStabilizationPlannerParams,
+        name: str = "point_stabilize_planner",
+        logging_level: LogLevel = LogLevel.ERROR,
+    ):
         """
         Initializes the QuadrotorStabilizationPlanner which is responsible for computing the desired states for point stabilization of a quadrotor.
         This planner uses the provided initial state, sample rate, and parameters to manage the stabilization process over discrete time steps.
@@ -28,9 +36,7 @@ class QuadrotorStabilizationPlanner(DiscreteTimeModel):
             sample_rate (int): The frequency (in Hz) at which the planner updates.
             params (QuadrotorStabilizationPlannerParams): Configuration parameters including target positions and desired body-axis orientations.
         """
-        super().__init__(
-            y0, sample_rate, "point_stabilize_planner", params, logging_level=LogLevel.INFO
-        )
+        super().__init__(y0, sample_rate, name, params, logging_level=logging_level)
         self.b1d_prev = e1
 
     def discrete_dynamics(self, t: float, _y: Any) -> Any:

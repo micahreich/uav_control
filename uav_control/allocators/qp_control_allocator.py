@@ -4,8 +4,10 @@ from typing import Any, Dict, List
 import cvxpy as cp
 import numpy as np
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
+from hybrid_ode_sim.utils.logging_tools import LogLevel
 
-from uav_control.constants import a_g_N, compose_state_dot, decompose_state, e3, g, thrust_axis_B
+from uav_control.constants import (a_g_N, compose_state_dot, decompose_state,
+                                   e3, g, thrust_axis_B)
 from uav_control.dynamics import QuadrotorRigidBodyParams
 
 
@@ -19,7 +21,14 @@ class QuadrotorQPAllocatorParams:
 
 
 class QuadrotorQPAllocator(DiscreteTimeModel):
-    def __init__(self, y0: np.ndarray, sample_rate: int, params=QuadrotorQPAllocatorParams()):
+    def __init__(
+        self,
+        y0: np.ndarray,
+        sample_rate: int,
+        name: str = "allocator",
+        params=QuadrotorQPAllocatorParams(),
+        logging_level: LogLevel = LogLevel.ERROR,
+    ):
         """
         Initialize the QP-based control allocator. Solves the following optimization problem:
 
@@ -33,7 +42,7 @@ class QuadrotorQPAllocator(DiscreteTimeModel):
             sample_rate (int): The sample rate of the control system (Hz).
             params (QuadrotorQPAllocatorParams, optional): The parameters for the QPControlAllocator, by default QuadrotorQPAllocatorParams().
         """
-        super().__init__(y0, sample_rate, "allocator", params)
+        super().__init__(y0, sample_rate, name, params, logging_level)
 
         # Construct the allocation matrix G s.t. tau = G @ u
         self.G1 = np.zeros(shape=(4, 4))

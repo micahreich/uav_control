@@ -4,46 +4,25 @@ from typing import Tuple
 
 import numpy as np
 import sympy as sym
-from hybrid_ode_sim.simulation.base import ContinuousTimeModel, DiscreteTimeModel
+from hybrid_ode_sim.simulation.base import (ContinuousTimeModel,
+                                            DiscreteTimeModel)
 from hybrid_ode_sim.utils.logging_tools import LogLevel
 from scipy.interpolate import interp1d
-from spatialmath.base import q2r, qconj, qdotb, qnorm, qslerp, qunit, qvmul, skewa
+from spatialmath.base import (exp2r, q2r, qconj, qdotb, qnorm, qqmul, qslerp,
+                              qunit, qvmul, r2q, skewa)
 
 import uav_control.constants as constants
-from uav_control.constants import (
-    OMEGA_B0_B,
-    OMEGA_B0_B_DIM,
-    Q_NB,
-    Q_NB_DIM,
-    R_B0_N,
-    R_B0_N_DIM,
-    TAU_B0_B,
-    TAU_B0_B_DIM,
-    THRUST,
-    THRUST_DIM,
-    V_B0_N,
-    V_B0_N_DIM,
-    a_g_N,
-    compose_state,
-    compose_state_dot,
-    decompose_control,
-    decompose_state,
-    e3,
-    thrust_axis_B,
-)
-from uav_control.utils.math import (
-    compute_cross_product_dot,
-    compute_unit_vector_ddot,
-    compute_unit_vector_dot,
-    dxu_dx_jacobian,
-    sym_Aq,
-    sym_Gq,
-    sym_H,
-    sym_Lq,
-    sym_Rq,
-    sym_skewsym,
-    vee,
-)
+from uav_control.constants import (OMEGA_B0_B, OMEGA_B0_B_DIM, Q_NB, Q_NB_DIM,
+                                   R_B0_N, R_B0_N_DIM, TAU_B0_B, TAU_B0_B_DIM,
+                                   THRUST, THRUST_DIM, V_B0_N, V_B0_N_DIM,
+                                   a_g_N, compose_state, compose_state_dot,
+                                   decompose_control, decompose_state, e3,
+                                   thrust_axis_B)
+from uav_control.utils.math import (compute_cross_product_dot,
+                                    compute_unit_vector_ddot,
+                                    compute_unit_vector_dot, dxu_dx_jacobian,
+                                    sym_Aq, sym_Gq, sym_H, sym_Lq, sym_Rq,
+                                    sym_skewsym, vee)
 
 nx = R_B0_N_DIM + V_B0_N_DIM + Q_NB_DIM + OMEGA_B0_B_DIM  # Number of states
 nu = THRUST_DIM + TAU_B0_B_DIM  # Number of controls
@@ -73,7 +52,9 @@ class QuadrotorRigidBodyDynamics(ContinuousTimeModel):
         self,
         y0: np.ndarray,
         params: QuadrotorRigidBodyParams,
+        name: str = "quadrotor_state",
         logging_level=LogLevel.ERROR,
+        noise_y0: bool = False,
     ):
         """
         Initializes the QuadrotorDynamics class.
@@ -90,8 +71,22 @@ class QuadrotorRigidBodyDynamics(ContinuousTimeModel):
             The parameters of the UAV rigid body model.
         logging_level : LogLevel, optional
             The logging level for the model. Defaults to LogLevel.ERROR.
+        noise_y0 : bool, optional
+            Whether to add noise to the initial state. Sometimes required when using LQR to avoid exact 0s
+            in some spots which make numerical solvers break down. Defaults to False.
         """
-        super().__init__(y0, "quadrotor_state", params, logging_level=logging_level)
+        if noise_y0:
+            _sigma = 1e-4
+            r_b0_N, q_NB, v_b0_N, omega_b0_B = decompose_state(y0)
+
+            r_noised = r_b0_N + np.random.normal(0, _sigma, 3)
+            q_noised = qqmul(q_NB, r2q(exp2r(np.random.normal(0, _sigma, 3))))
+            v_noised = v_b0_N + np.random.normal(0, _sigma, 3)
+            omega_noised = omega_b0_B + np.random.normal(0, _sigma, 3)
+
+            y0 = compose_state(r_noised, q_noised, v_noised, omega_noised)
+
+        super().__init__(y0, name, params, logging_level=logging_level)
 
     def output_validate(self, y: np.ndarray) -> np.ndarray:
         """

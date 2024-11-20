@@ -6,11 +6,13 @@ import numpy as np
 import spatialmath as sm
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
 from hybrid_ode_sim.utils.logging_tools import LogLevel
-from spatialmath.base import qconj, qdotb, qnorm, qvmul, rotx, roty, rotz, skewa
+from spatialmath.base import (qconj, qdotb, qnorm, qvmul, rotx, roty, rotz,
+                              skewa)
 
 from uav_control.constants import R_B0_N, V_B0_N, decompose_state, e1
 from uav_control.planners.polynomial_trajgen import PolynomialTrajectoryND
-from uav_control.utils.math import compute_unit_vector_ddot, compute_unit_vector_dot
+from uav_control.utils.math import (compute_unit_vector_ddot,
+                                    compute_unit_vector_dot)
 
 
 class TrackingType(Enum):
@@ -26,7 +28,14 @@ class QuadrotorPolynomialPlannerParams:
 
 
 class QuadrotorPolynomialPlanner(DiscreteTimeModel):
-    def __init__(self, y0: Any, sample_rate: int, params: QuadrotorPolynomialPlannerParams):
+    def __init__(
+        self,
+        y0: Any,
+        sample_rate: int,
+        params: QuadrotorPolynomialPlannerParams,
+        name: str = "polynomial_planner",
+        logging_level: LogLevel = LogLevel.ERROR,
+    ):
         """
         Initializes the QuadrotorPolynomialPlanner which is responsible for generating a minimum-snap polynomial trajectory for a quadrotor.
         This planner uses the provided initial state, sample rate, and parameters to create a trajectory based on waypoints and timepoints.
@@ -46,7 +55,7 @@ class QuadrotorPolynomialPlanner(DiscreteTimeModel):
             which means the planner will follow the trajectory based on the current time. Spatial tracking will follow the trajectory
             based on the closest waypoint to the current position.
         """
-        super().__init__(y0, sample_rate, "polynomial_planner", params, logging_level=LogLevel.INFO)
+        super().__init__(y0, sample_rate, name, params, logging_level=logging_level)
 
         self.polynomial_traj = PolynomialTrajectoryND(
             waypoints=params.waypoint_positions,
