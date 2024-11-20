@@ -24,20 +24,22 @@ git clone https://github.com/micahreich/uav_control.git  # for https
 git clone git@github.com:micahreich/uav_control.git      # for ssh
 ```
 
-Set up a (Mini)-conda environment with dependancies:
+Install pip requirements from the `requirements.txt`:
+
+``` bash
+pip install -r requirements.txt
+```
+
+Finally, install the `uav_control` python package locally in editable mode with:
 ```bash
-cd uav_control
-conda env create --name uav_control --file environment.yml  # create miniconda environment with requirements
-conda activate uav_control                                  # activate conda environment
-pip install -e .                                            # install uav_control package locally in editable mode
+pip install -e .
 ```
 
 Now you can run any of the examples locally.
 
-To update to a specific version of `hybrid_ode_sim` (with the conda environment active):
+To update to a specific version of `hybrid_ode_sim` (with the virtual environment active):
 ```bash
 pip install --upgrade git+https://github.com/micahreich/hybrid_ode_sim.git@main  # to update to whatever is on the `main` branch
-pip install --upgrade git+https://github.com/username/repository.git@commit_hash # to update to a specific commit hash
 ```
 
 ## References
