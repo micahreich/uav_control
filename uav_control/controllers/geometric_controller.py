@@ -58,7 +58,7 @@ class GeometricController(DiscreteTimeModel):
 
         # Check if using tilt priority or not
         self.tilt_priority = isinstance(params, GeometricControllerTiltPrioritizedParams)
-        self.f_app_prev = 9.8
+        self.f_app_prev = self.rbd_params.m * g
         self.f_app_dot_prev = 0.0
 
         self.planner_name = planner_name

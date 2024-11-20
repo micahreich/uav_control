@@ -35,7 +35,7 @@ from uav_control.utils.math import (
     compute_cross_product_dot,
     compute_unit_vector_ddot,
     compute_unit_vector_dot,
-    dqu_dq_jacobian,
+    dxu_dx_jacobian,
     sym_Aq,
     sym_Gq,
     sym_H,
@@ -69,37 +69,6 @@ class QuadrotorLinearization:
 
 
 class QuadrotorRigidBodyDynamics(ContinuousTimeModel):
-    @staticmethod
-    def _symbolic_dynamics() -> None:
-        I = sym.MatrixSymbol('I', 3, 3)  # Inertia matrix
-        I_inv = sym.MatrixSymbol('I_inv', 3, 3)  # Inertia matrix
-        g = sym.symbols('g')  # Gravitation constant
-        m = sym.symbols('m')  # Mass
-
-        p = sym.MatrixSymbol('p', R_B0_N_DIM, 1)  # Position (world frame)
-        v = sym.MatrixSymbol('v', V_B0_N_DIM, 1)  # Velocity (world frame)
-        omega = sym.MatrixSymbol('omega', OMEGA_B0_B_DIM, 1)  # Angular velocity (body frame)
-        q = sym.MatrixSymbol('q', Q_NB_DIM, 1)  # Attitude (unit quaternion)
-
-        x = sym.BlockMatrix([[p], [q], [v], [omega]]).as_explicit()
-
-        tau = sym.MatrixSymbol('tau', TAU_B0_B_DIM, 1)
-        c = sym.symbols('c')
-
-        u = sym.BlockMatrix([[sym.Matrix([c])], [tau]]).as_explicit()
-
-        # Equations of motion
-        pdot = v
-        vdot = 1 / m * (sym.Matrix([0, 0, m * g]) + sym_Aq(q) @ sym.Matrix([0, 0, c]))
-        qdot = 1 / 2 * sym_Lq(q) @ sym_H @ omega
-        omegadot = I_inv @ (tau - sym_skewsym(omega) @ (I @ omega))
-
-        dx_dt = sym.BlockMatrix([[pdot], [qdot], [vdot], [omegadot]]).as_explicit()
-
-        return dx_dt, x, u
-
-    dx_dt_symbolic, x, u = _symbolic_dynamics.__func__()
-
     def __init__(
         self,
         y0: np.ndarray,
@@ -124,8 +93,6 @@ class QuadrotorRigidBodyDynamics(ContinuousTimeModel):
         """
         super().__init__(y0, "quadrotor_state", params, logging_level=logging_level)
 
-        self.dx_dt_symbolic_paramified = self._paramify_symbolic_dynamics()
-
     def output_validate(self, y: np.ndarray) -> np.ndarray:
         """
         Validates the output of the quadrotor dynamics, ensuring unit-norm quaternions.
@@ -144,26 +111,6 @@ class QuadrotorRigidBodyDynamics(ContinuousTimeModel):
         r_b0_N, q_NB, v_b0_N, omega_b0_B = decompose_state(y)
 
         return compose_state(r_b0_N, q_NB / qnorm(q_NB), v_b0_N, omega_b0_B)
-
-    def _paramify_symbolic_dynamics(self):
-        I = sym.MatrixSymbol('I', 3, 3)  # Inertia matrix
-        I_inv = sym.MatrixSymbol('I_inv', 3, 3)  # Inertia matrix
-        g = sym.symbols('g')  # Gravitation constant
-        m = sym.symbols('m')  # Mass
-
-        parameter_substituions = {
-            I: sym.Matrix(self.params.I),
-            I_inv: sym.Matrix(self.params.I_inv),
-            m: self.params.m,
-            g: constants.g,
-        }
-
-        dx_dt_paramified = QuadrotorRigidBodyDynamics.dx_dt_symbolic.subs(parameter_substituions)
-        dx_dt_symbolic_paramified = sym.lambdify(
-            (QuadrotorRigidBodyDynamics.x, QuadrotorRigidBodyDynamics.u), dx_dt_paramified, 'numpy'
-        )
-
-        return dx_dt_symbolic_paramified
 
     def continuous_dynamics(self, t: float, y: np.ndarray) -> np.ndarray:
         """
@@ -194,7 +141,15 @@ class QuadrotorRigidBodyDynamics(ContinuousTimeModel):
             )
             allocated_wrench = np.zeros(4)
 
-        return self.dx_dt_symbolic_paramified(y, allocated_wrench).flatten()
+        decomposed_state = decompose_state(y)
+        collective_thrust, torque = decompose_control(allocated_wrench)
+
+        return compose_state_dot(
+            v_b0_N=self.compute_v_b0_N(decomposed_state),
+            q_NB_dot=self.compute_q_NB_dot(decomposed_state),
+            a_b0_N=self.compute_a_b0_N(decomposed_state, collective_thrust),
+            omega_b0_B_dot=self.compute_omega_b0_B_dot(decomposed_state, torque),
+        )
 
     def history_interpolator(self, t):
         t_idx = bisect.bisect_left(self.t_history, t)
@@ -366,122 +321,6 @@ class QuadrotorRigidBodyDynamics(ContinuousTimeModel):
         )
 
         return domega_b0_B
-
-    def linearize(self, x0, u0) -> QuadrotorLinearization:
-        """
-        Linearizes the nonlinear dynamics of a quadrotor around a given state and control input.
-        This function computes the Jacobian matrices of the system dynamics with respect to the state and control input,
-        evaluated at the operating point (x0, u0). The resulting linearized system can be represented as:
-        \dot{x} = J_x * x + J_u * u
-        x0 : np.ndarray
-            The state vector at the operating point, typically including position, orientation (quaternion), velocity, and angular velocity.
-        u0 : np.ndarray
-            The control input vector at the operating point, typically including thrust and torque.
-
-        Parameters
-        ----------
-        x0 : np.ndarray (nx,)
-            Linearization state
-        u0 : np.ndarray (nu,)
-            Linearization control
-
-        Returns
-        -------
-        QuadrotorLinearization
-            An object containing the Jacobian matrices J_x and J_u, and the operating point (x0, u0).
-        """
-        c, tau_b0_B = decompose_control(u0)
-        r_b0_N, q_NB, v_b0_N, omega_b0_B = decompose_state(x0)
-        qw, qx, qy, qz = q_NB
-        wx, wy, wz = omega_b0_B
-        [[I_xx, I_xy, I_xz], [I_xy, I_yy, I_yz], [I_xz, I_yz, I_zz]] = self.params.I
-
-        # Construct individual jacobian elements
-        dqu_dq = dqu_dq_jacobian(q_NB)
-
-        dpdot_dv = np.eye(3)
-
-        dvdot_dq = (
-            2
-            * c
-            * 1
-            / self.params.m
-            * np.array(
-                [
-                    [qy, qz, qw, qx],
-                    [-qx, -qw, qz, qy],
-                    [0, -2 * qx, -2 * qy, 0],  # why is this different in the paper..?
-                ]
-            )
-            @ dqu_dq
-        )
-
-        dqdot_dq = (
-            1
-            / 2
-            * np.array([[0, -wx, -wy, -wz], [wx, 0, wz, -wy], [wy, -wz, 0, wx], [wz, wy, -wx, 0]])
-            @ dqu_dq
-        )
-
-        dqdot_domega = (
-            1 / 2 * np.array([[-qx, -qy, -qz], [qw, -qz, qy], [qz, qw, -qx], [-qy, qx, qw]])
-        )
-
-        domegadot_domega = -self.params.I_inv @ np.array(
-            [
-                [
-                    -I_xy * wz + I_xz * wy,
-                    I_xz * wx - I_yy * wz + 2 * I_yz * wy + I_zz * wz,
-                    -I_xy * wx - I_yy * wy - 2 * I_yz * wz + I_zz * wy,
-                ],
-                [
-                    I_xx * wz - 2 * I_xz * wx - I_yz * wy - I_zz * wz,
-                    I_xy * wz - I_yz * wx,
-                    I_xx * wx + I_xy * wy + 2 * I_xz * wz - I_zz * wx,
-                ],
-                [
-                    -I_xx * wy + 2 * I_xy * wx + I_yy * wy + I_yz * wz,
-                    -I_xx * wx - 2 * I_xy * wy - I_xz * wz + I_yy * wx,
-                    -I_xz * wy + I_yz * wx,
-                ],
-            ]
-        )
-
-        dvdot_dc = (
-            1
-            / self.params.m
-            * np.array(
-                [
-                    [2 * (qw * qy + qx * qz)],
-                    [2 * (qy * qz - qw * qx)],
-                    [qw**2 - qx**2 - qy**2 + qz**2],
-                ]
-            )
-        )
-
-        domegadot_dtau = self.params.I_inv
-
-        # Construct jacobians J_x, J_u to represent the linearized system dynamics as \dot{x} = J_x * x + J_u * u
-        Jx = np.zeros(shape=(nx, nx))
-        Ju = np.zeros(shape=(nx, nu))
-
-        # fmt: off
-        Jx = np.block([
-            [np.zeros((R_B0_N_DIM, R_B0_N_DIM)),     dpdot_dv,                     np.zeros((R_B0_N_DIM, Q_NB_DIM)),     np.zeros((R_B0_N_DIM, OMEGA_B0_B_DIM))], # d\dot{p}/d{p, v, q, omega}
-            [np.zeros((Q_NB_DIM, R_B0_N_DIM)),     np.zeros((Q_NB_DIM, V_B0_N_DIM)),     dqdot_dq,                     dqdot_domega],                 # d\dot{q}/d{p, v, q, omega}
-            [np.zeros((V_B0_N_DIM, R_B0_N_DIM)),     np.zeros((V_B0_N_DIM, V_B0_N_DIM)),     dvdot_dq,                     np.zeros((V_B0_N_DIM, OMEGA_B0_B_DIM))], # d\dot{v}/d{p, v, q, omega}
-            [np.zeros((OMEGA_B0_B_DIM, R_B0_N_DIM)), np.zeros((OMEGA_B0_B_DIM, V_B0_N_DIM)), np.zeros((OMEGA_B0_B_DIM, Q_NB_DIM)), domegadot_domega],             # d\dot{omega}/d{p, v, q, omega}
-        ])
-
-        Ju = np.block([
-            [np.zeros((R_B0_N_DIM, THRUST_DIM)),     np.zeros((R_B0_N_DIM, TAU_B0_B_DIM))],
-            [np.zeros((Q_NB_DIM, THRUST_DIM)),     np.zeros((Q_NB_DIM, TAU_B0_B_DIM))],
-            [dvdot_dc,                     np.zeros((V_B0_N_DIM, TAU_B0_B_DIM))],
-            [np.zeros((OMEGA_B0_B_DIM, THRUST_DIM)), domegadot_dtau],
-        ])
-        # fmt: on
-
-        return QuadrotorLinearization(Jx, Ju, x0, u0)
 
     def compute_differential_flatness_states_controls(
         self,

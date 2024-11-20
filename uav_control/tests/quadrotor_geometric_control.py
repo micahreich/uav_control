@@ -20,6 +20,7 @@ from uav_control.controllers.geometric_controller import (
     GeometricControllerTiltPrioritizedParams,
 )
 from uav_control.dynamics import QuadrotorRigidBodyDynamics, QuadrotorRigidBodyParams
+from uav_control.planners.differential_flatness_planner import DifferentialFlatnessPlanner
 from uav_control.planners.point_stabilize_planner import (
     QuadrotorStabilizationPlanner,
     QuadrotorStabilizationPlannerParams,
@@ -155,19 +156,7 @@ def waypoint_test(save=False):
     env = SimulationEnvironment(
         simulator=simulator,
         plot_env=plot_env,
-    ).run_simulation(t_range=t_range, realtime=True, show_time=True)
-
-    # env = PlotEnvironment(fig, ax, t_range, frame_rate=20, t_start=0.0)
-    # quadrotor_frame = QuadrotorFrame(env, system=quadrotor)
-    # path = WaypointTrajectory(env, waypoints, waypoint_color="red")
-    # trail = TraveledPath(env, system=quadrotor)
-
-    # env.render(
-    #     plot_elements=[quadrotor_frame, path, trail],
-    #     show_time=True,
-    #     save=save,
-    #     save_path=f"{SAVED_FIGURES_PATH}/geometric_control/waypoint_test.mp4",
-    # )
+    ).run_simulation(t_range=t_range, realtime=False, show_time=True)
 
 
 def upside_down_test(save=False):
@@ -178,6 +167,8 @@ def upside_down_test(save=False):
             position=np.array([0.0, 0.0, 1.0]), b1d=np.array([1.0, 0.0, 0.0])
         ),
     )
+
+    dfb_planner = Differential
 
     rigid_body_params = QuadrotorRigidBodyParams(m=M, I=I, D_drag=D_drag)
 
@@ -215,7 +206,7 @@ def upside_down_test(save=False):
             kOmega=2.54 * np.diag([1.0, 1.0, 1.0]),
         ),
         rbd_params=rigid_body_params,
-        planner_name="point_stabilize_planner",
+        planner_name="dfb_planner",
     )
 
     # Create simulator

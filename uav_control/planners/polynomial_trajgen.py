@@ -206,7 +206,7 @@ class PolynomialTrajectoryND:
             [r, v] = self(t, n_derivatives=1)
 
             r_error = r_d - r
-            objective_value = np.dot(r_error, r_error)
+            objective_value = np.linalg.norm(r_error)
 
             return objective_value
 

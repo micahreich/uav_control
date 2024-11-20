@@ -116,7 +116,7 @@ class QuadrotorPolynomialPlanner(DiscreteTimeModel):
         v_b0_N_ref_planar = v_b0_N_ref[0:2]
         v_b0_N_ref_planar_norm = np.linalg.norm(v_b0_N_ref_planar)
 
-        if v_b0_N_ref_planar_norm > 0.01:
+        if v_b0_N_ref_planar_norm > 1e-3:
             a_b0_N_ref_planar = a_b0_N_ref[0:2]
             j_b0_N_ref_planar = j_b0_N_ref[0:2]
 

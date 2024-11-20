@@ -12,7 +12,7 @@ from uav_control.controllers.geometric_controller import decompose_state
 
 
 class DifferentialFlatnessPlanner(DiscreteTimeModel):
-    def __init__(self, y0: Any, sample_rate: int, planner_name: str):
+    def __init__(self, sample_rate: int, planner_name: str, y0: Any = None):
         super().__init__(y0, sample_rate, "dfb_planner", None, logging_level=LogLevel.INFO)
         self.planner_name = planner_name
 
@@ -53,7 +53,7 @@ class DifferentialFlatnessPlanner(DiscreteTimeModel):
         [r_d0_N, v_d0_N, rot_ND, omega_d0_D], [
             f_cmd,
             tau_d0_D,
-        ] = dynamics.compute_diferential_flatness_states_controls(
+        ] = dynamics.compute_differential_flatness_states_controls(
             r_b0_N_ref,
             v_b0_N_ref,
             A,
