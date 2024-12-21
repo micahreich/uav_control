@@ -15,7 +15,7 @@ from spatialmath.base import q2r, qslerp, qunit, r2q, rotz
 from uav_control.constants import compose_state, decompose_state
 
 
-class PolynomialTrajectory(PlotElement):
+class PolynomialTrajectoryElement(PlotElement):
     def __init__(
         self,
         polytraj,
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     ax = fig.add_subplot(111, projection="3d")
 
     env = PlotEnvironment(fig, ax, sim_t_range=(times[0], times[-1]), frame_rate=60)
-    path_viz = PolynomialTrajectory(env, traj, color_velocities=True)
+    path_viz = PolynomialTrajectoryElement(env, traj, color_velocities=True)
 
     env.ax.set_xlim([0, 10])
     env.ax.set_ylim([0, 10])

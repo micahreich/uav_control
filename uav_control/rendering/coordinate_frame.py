@@ -13,7 +13,7 @@ from spatialmath.base import q2r, qconj, qslerp, qunit, r2q, rotz
 from uav_control.constants import compose_state, decompose_state
 
 
-class CoordinateFrame(PlotElement):
+class CoordinateFrameElement(PlotElement):
     def __init__(
         self,
         env: PlotEnvironment,
@@ -164,6 +164,6 @@ if __name__ == "__main__":
         return compose_state(r_b0_N=qvmul(qnm, np.array([1, 0, 0])), q_NB=qnm)
 
     env = PlotEnvironment(fig, ax, sim_t_range=[0.0, 4.0], frame_rate=60)
-    coordinate_frame = CoordinateFrame(env, system=None, _debug_history=(ts, ys, system_history_fn))
+    coordinate_frame = CoordinateFrameElement(env, system=None, _debug_history=(ts, ys, system_history_fn))
 
     env.render(plot_elements=[coordinate_frame])

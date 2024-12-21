@@ -13,7 +13,7 @@ from spatialmath.base import q2r, qconj, qslerp, qunit, r2q, rotx, roty, rotz
 from uav_control.constants import compose_state, decompose_state
 
 
-class QuadrotorFrame(PlotElement):
+class QuadrotorFrameElement(PlotElement):
     def __init__(
         self,
         system: Optional[BaseModel],
@@ -176,7 +176,7 @@ if __name__ == "__main__":
         return compose_state(r_b0_N=qvmul(qnm, np.array([1, 0, 0])), q_NB=qnm)
 
     env = PlotEnvironment(fig, ax, sim_t_range=[0.0, 4.0], frame_rate=60)
-    coordinate_frame = QuadrotorFrame(env, system=None, _debug_history=(ts, ys, system_history_fn))
+    coordinate_frame = QuadrotorFrameElement(env, system=None, _debug_history=(ts, ys, system_history_fn))
 
     ax.set_xlim(-1, 1)
     ax.set_ylim(-1, 1)

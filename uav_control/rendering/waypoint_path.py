@@ -15,7 +15,7 @@ from spatialmath.base import q2r, qslerp, qunit, r2q, rotz
 from uav_control.constants import compose_state, decompose_state
 
 
-class WaypointTrajectory(PlotElement):
+class WaypointTrajectoryElement(PlotElement):
     def __init__(
         self,
         waypoints,
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     ax = fig.add_subplot(111, projection="3d")
 
     env = PlotEnvironment(fig, ax, sim_t_range=(0, 1), frame_rate=60)
-    path_viz = WaypointTrajectory(env, waypoints)
+    path_viz = WaypointTrajectoryElement(env, waypoints)
 
     env.ax.set_xlim([0, 10])
     env.ax.set_ylim([0, 10])

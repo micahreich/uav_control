@@ -39,6 +39,7 @@ class QuadrotorWaypointPlanner(DiscreteTimeModel):
         super().__init__(y0, sample_rate, name, params, logging_level=logging_level)
         self.b1d_prev = e1
         self.waypoint_idx = 0
+        self.idx = 0
 
     def discrete_dynamics(self, t: float, _y: Any) -> Any:
         """
@@ -58,32 +59,33 @@ class QuadrotorWaypointPlanner(DiscreteTimeModel):
         r_b0_N, _, _, _ = decompose_state(dynamics.y)
 
         close_to_waypoint_thresh_m = 0.5
-        v_pos_to_waypoint = self.params.waypoint_positions[idx] - r_b0_N
+        v_pos_to_waypoint = self.params.waypoint_positions[self.idx] - r_b0_N
 
         if self.params.waypoint_times is not None:
             t_verified = np.clip(t, self.params.waypoint_times[0], self.params.waypoint_times[-1])
-            idx = np.searchsorted(self.params.waypoint_times, t_verified, side="left")
+            self.idx = np.searchsorted(self.params.waypoint_times, t_verified, side="left")
         else:
             if np.linalg.norm(v_pos_to_waypoint) < close_to_waypoint_thresh_m:
                 self.waypoint_idx = max(
                     self.waypoint_idx + 1, len(self.params.waypoint_positions) - 1
                 )
-                idx = self.waypoint_idx
+                self.idx = self.waypoint_idx
 
-                v_pos_to_waypoint = self.params.waypoint_positions[idx] - r_b0_N
+                v_pos_to_waypoint = self.params.waypoint_positions[self.idx] - r_b0_N
 
-        planar_projection = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 0]])
+        # planar_projection = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 0]])
 
-        # If the quadrotor is close to the waypoint, keep the previous yaw direction
-        if np.linalg.norm(v_pos_to_waypoint) < 0.5:
-            b1d = self.b1d_prev
-        else:
-            b1d = planar_projection @ (v_pos_to_waypoint / np.linalg.norm(v_pos_to_waypoint))
+        # # If the quadrotor is close to the waypoint, keep the previous yaw direction
+        # if np.linalg.norm(v_pos_to_waypoint) < 0.5:
+        #     b1d = self.b1d_prev
+        # else:
+        #     b1d = planar_projection @ (v_pos_to_waypoint / np.linalg.norm(v_pos_to_waypoint))
 
-        self.b1d_prev = b1d
+        # self.b1d_prev = b1d
+        b1d = self.b1d_prev
 
         return [
-            self.params.waypoint_positions[idx],
+            self.params.waypoint_positions[self.idx],
             np.zeros(3),
             np.zeros(3),
             np.zeros(3),

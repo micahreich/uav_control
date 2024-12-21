@@ -1,6 +1,6 @@
 import numpy as np
 import sympy as sym
-from spatialmath.base import qnorm, skew
+from spatialmath.base import qnorm, skew, qconj, qqmul, qvmul
 
 ### Sympy functions for working with quaternions and vectors
 
@@ -248,7 +248,7 @@ def qu_to_aa(q):
 
     theta = 2 * np.arccos(qu[0])
     if np.abs(theta) < 1e-8:
-        return np.array([np.zeros(3), 0])
+        return np.random.normal(0, 1e-4, 3), 0.0
 
     axis = qu[1:] / np.sin(theta / 2)
     return axis, theta
@@ -320,3 +320,34 @@ def so3_jacobian_right(axis, angle):
         - (1 - np.cos(angle)) / angle**2 * axis_skew
         + (angle - np.sin(angle)) / angle**3 * (axis_skew @ axis_skew)
     )
+
+def qu_err_to_aa_err(q_curr, q_des, curr_minus_ref: bool = True):
+    """
+    Convert a quaternion error to an axis-angle error.
+
+    Parameters
+    ----------
+    q_err : np.ndarray
+        Quaternion error
+
+    Returns
+    -------
+    np.ndarray
+        Axis-angle error
+    """
+    q_err = qqmul(qconj(q_curr), q_des)
+
+    if curr_minus_ref:
+        q_err = qconj(q_err)
+
+    if q_err[0] < 0:
+        q_err = -q_err
+
+    q_err /= qnorm(q_err)
+    axis, theta = qu_to_aa(q_err)
+
+    if theta > np.pi:
+        theta = 2 * np.pi - theta
+        axis = -axis
+
+    return theta, axis

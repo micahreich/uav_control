@@ -13,7 +13,7 @@ from spatialmath.base import q2r, qconj, qslerp, qunit, r2q, rotx, roty, rotz
 from uav_control.constants import compose_state, decompose_state
 
 
-class TraveledPath(PlotElement):
+class TraveledPathElement(PlotElement):
     def __init__(
         self, system: BaseModel, color="blue", alpha=0.5, env: Optional[PlotEnvironment] = None
     ):

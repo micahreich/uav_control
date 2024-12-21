@@ -6,9 +6,11 @@ import numpy as np
 import scipy as sp
 from hybrid_ode_sim.simulation.base import DiscreteTimeModel
 from hybrid_ode_sim.utils.logging_tools import LogLevel
-from spatialmath.base import angvec2r, q2r, qconj, qnorm, qqmul, qvmul, r2q, skewa
+from spatialmath.base import (angvec2r, q2r, qconj, qnorm, qqmul, qvmul, r2q,
+                              skewa)
 
-from uav_control.constants import a_g_N, compose_state_dot, decompose_state, e3, g, thrust_axis_B
+from uav_control.constants import (a_g_N, compose_state_dot, decompose_state,
+                                   e3, g, thrust_axis_B)
 from uav_control.dynamics import QuadrotorRigidBodyParams
 
 nx, nu = 3 + 3 + 4, 1 + 3
