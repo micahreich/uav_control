@@ -1,6 +1,30 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uav_control"
+version = "0.1.0"
+description = "UAV simulation and control algorithms from popular research papers implemented in Python"
+authors = [
+    { name = "Micah Reich", email = "micahreich02@gmail.com" }
+]
+license = { text = "MIT" }
+readme = "README.md"
+keywords = ["uav", "control", "simulator", "library"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy",
+]
+requires-python = ">=3.9"
+
 [tool.black]
 line-length = 100
-target-version = ['py37', 'py38']
+target-version = ['py37', 'py48', 'py39']
 skip-string-normalization = true
 include = '\.pyi?$'
 exclude = '''
