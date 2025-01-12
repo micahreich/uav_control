@@ -161,11 +161,11 @@ class LQRDynamicsLinearization(DiscreteTimeModel):
         x_err, u_err = self.compute_reduced_error_state(x, x0, u, u0)
         [r_err, phi_err, v_err], [c_err, omega_err] = self.decompose_reduced_error_state(x_err, u_err)
 
-        dr_err_dot__dr_err = skew(R_WB @ omega_err)
+        dr_err_dot__dr_err = np.zeros((R_B0_N_DIM, R_B0_N_DIM))
         dr_err_dot__dphi_err = np.zeros((R_B0_N_DIM, AA_DIM))
         dr_err_dot__dv_err = R_WB
         dr_err_dot__dc_err = np.zeros((R_B0_N_DIM, THRUST_DIM))
-        dr_err_dot__domega_err = -R_WB @ skew(R_WB.T @ r_err)
+        dr_err_dot__domega_err = np.zeros((R_B0_N_DIM, OMEGA_B0_B_DIM))
 
         dphi_err_dot__dr_err = np.zeros((AA_DIM, R_B0_N_DIM))
         dphi_err_dot__dphi_err = np.zeros((AA_DIM, AA_DIM))
@@ -428,10 +428,10 @@ class BodyrateController(DiscreteTimeModel):
 
         collective_thrust_c, omega_c0_B = lqr_control[0], lqr_control[1:4]
 
-        domega_b0_B = -self.params.P @ (omega_b0_B - omega_c0_B)
+        omega_c0_B_dot = -self.params.P @ (omega_b0_B - omega_c0_B)
 
         # Low-level bodyrate controller to track desired angular velocities, feedback linearization
-        control_wrench = self.rbd_params.I @ domega_b0_B + np.cross(
+        control_wrench = self.rbd_params.I @ omega_c0_B_dot + np.cross(
             omega_b0_B, self.rbd_params.I @ omega_b0_B
         )
 

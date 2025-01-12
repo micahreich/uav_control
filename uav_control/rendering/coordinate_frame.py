@@ -16,18 +16,29 @@ from uav_control.constants import compose_state, decompose_state
 class CoordinateFrameElement(PlotElement):
     def __init__(
         self,
-        env: PlotEnvironment,
         system: Optional[BaseModel],
-        show_origin=True,
+        show_origin=False,
+        env: Optional[PlotEnvironment] = None,
         _debug_history: Optional[Tuple] = None,
     ):
         super().__init__(env, logging_level=LogLevel.ERROR)
+        self.system = system
+        self.show_origin = show_origin
+
+        if _debug_history is None:
+            _, _, self.history = system.history()
+        else:
+            assert len(_debug_history) == 3 and system is None
+            self.ts, self.ys, self.history = _debug_history
+
+    def init_environment(self, env):
+        super().init_environment(env)
 
         self.frame_x_vec = self.env.ax.quiver(0, 0, 0, 0, 0, 0, color="r", length=1.0)
         self.frame_y_vec = self.env.ax.quiver(0, 0, 0, 0, 0, 0, color="g", length=1.0)
         self.frame_z_vec = self.env.ax.quiver(0, 0, 0, 0, 0, 0, color="b", length=1.0)
 
-        if show_origin:
+        if self.show_origin:
             self.env.ax.scatter(0, 0, 0, color="gray", s=10, alpha=0.5)
             for v in np.eye(3):
                 self.env.ax.quiver(
@@ -75,12 +86,6 @@ class CoordinateFrameElement(PlotElement):
             ha="center",
         )
 
-        if _debug_history is None:
-            self.ts, self.ys, self.history = system.history()
-        else:
-            assert len(_debug_history) == 3 and system is None
-            self.ts, self.ys, self.history = _debug_history
-
     def set_text_location(self, text_locations):
         for i, (text, axis) in enumerate(
             zip(
@@ -92,6 +97,9 @@ class CoordinateFrameElement(PlotElement):
             text.set_3d_properties(text_locations[2, i], axis)
 
     def update(self, t):
+        if self.env is None:
+            raise RuntimeError("The plot environment has not been initialized.")
+
         try:
             r_b0_N, q_NB, v_b0_N, omega_b0_B = decompose_state(self.history(t))
             rot_NB = q2r(q_NB)
@@ -111,16 +119,6 @@ class CoordinateFrameElement(PlotElement):
             :, None
         ]
         self.set_text_location(text_locations)
-
-        return (
-            self.frame_x_vec,
-            self.frame_y_vec,
-            self.frame_z_vec,
-            self.frame_x_text,
-            self.frame_y_text,
-            self.frame_z_text,
-        )
-
 
 if __name__ == "__main__":
     import matplotlib as mpl

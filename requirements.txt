@@ -2,8 +2,11 @@ ansitable==0.11.4
 appnope==0.1.4
 asttokens==3.0.0
 cfgv==3.4.0
+clarabel==0.9.0
 colored==2.2.4
 comm==0.2.2
+contourpy==1.3.0
+cvxpy==1.6.0
 cycler==0.12.1
 debugpy==1.8.11
 decorator==5.1.1
@@ -12,21 +15,23 @@ exceptiongroup==1.2.2
 executing==2.1.0
 filelock==3.16.1
 fonttools==4.55.3
-hybrid_ode_sim @ git+https://github.com/micahreich/hybrid_ode_sim.git@e88b65362e8ca826aa2c606b4d2917093a04a3d9
+-e git+ssh://git@github.com/micahreich/hybrid_ode_sim.git@7bb73eee22829d1fa59f1d09d0729bcb9511c8f8#egg=hybrid_ode_sim
 identify==2.6.3
 importlib_metadata==8.5.0
+importlib_resources==6.4.5
 ipykernel==6.29.5
 ipython==8.18.1
 jedi==0.19.2
 jupyter_client==8.6.3
 jupyter_core==5.7.2
 kiwisolver==1.4.7
-matplotlib==3.5.1
+matplotlib==3.9.4
 matplotlib-inline==0.1.7
 mpmath==1.3.0
 nest-asyncio==1.6.0
 nodeenv==1.9.1
 numpy==1.26.4
+osqp==0.6.7.post3
 packaging==24.2
 parso==0.8.4
 pexpect==4.9.0
@@ -42,14 +47,17 @@ pyparsing==3.2.0
 python-dateutil==2.9.0.post0
 PyYAML==6.0.2
 pyzmq==26.2.0
+qdldl==0.1.7.post4
 scipy==1.13.1
+scs==3.2.7
 six==1.17.0
-spatialmath-python==1.1.13
+spatialmath-python==1.1.9
 stack-data==0.6.3
 sympy==1.13.3
 tornado==6.4.2
 traitlets==5.14.3
 typing_extensions==4.12.2
+-e git+ssh://git@github.com/micahreich/uav_control.git@9a65d465e0b13ab865a7e39297242ae1bddaafe6#egg=uav_control
 virtualenv==20.28.0
 wcwidth==0.2.13
 zipp==3.21.0

@@ -94,6 +94,8 @@ class QuadrotorParametricCurvePlanner(DiscreteTimeModel):
         self.curve = curve
         self.static_heading = static_heading
 
+        self.b1d_prev, self.b1d_dot_prev, self.b1d_ddot_prev = None, None, None
+
     def discrete_dynamics(self, t: float, _y: Any) -> Any:
         """
         Returns the translational setpoints and desired 1st-body-axis direction at the current time.
@@ -121,14 +123,20 @@ class QuadrotorParametricCurvePlanner(DiscreteTimeModel):
             j = np.zeros(3)
             s = np.zeros(3)
 
-
         if self.static_heading:
             b1d = np.array([1, 0, 0])
             b1d_dot = np.zeros(3)
             b1d_ddot = np.zeros(3)
         else:
-            b1d = v / np.linalg.norm(v)
-            b1d_dot = compute_unit_vector_dot(v, a)
-            b1d_ddot = compute_unit_vector_ddot(v, a, j)
+            if np.allclose(v, np.zeros(3), atol=1e-6):
+                b1d = self.b1d_prev
+                b1d_dot = self.b1d_dot_prev
+                b1d_ddot = self.b1d_ddot_prev
+            else:
+                b1d = v / np.linalg.norm(v)
+                b1d_dot = compute_unit_vector_dot(v, a)
+                b1d_ddot = compute_unit_vector_ddot(v, a, j)
+
+        self.b1d_prev, self.b1d_dot_prev, self.b1d_ddot_prev = b1d, b1d_dot, b1d_ddot
 
         return [x, v, a, j, s], [b1d, b1d_dot, b1d_ddot]
