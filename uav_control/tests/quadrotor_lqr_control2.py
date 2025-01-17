@@ -54,7 +54,7 @@ def hover_stabilize():
         sample_rate=10,
         params=QuadrotorStabilizationPlannerParams(
             position=np.array([0.0, 0.0, 1.0]),
-            b1d=np.array([1.0, 0.0, 0.0])
+            b1d=np.array([0.0, 1.0, 0.0])
         ),
     )
 
@@ -68,7 +68,7 @@ def hover_stabilize():
     quadrotor = QuadrotorRigidBodyDynamics(
         y0=compose_state(
             r_b0_N=np.array([0.0, 0.0, 1.0]),
-            q_NB=sm.base.r2q(sm.base.rotx(15, "deg")),
+            q_NB=sm.base.r2q(sm.base.rotx(89, "deg")),
         ),
         params=rigid_body_params,
         logging_level=LogLevel.ERROR,
@@ -91,11 +91,11 @@ def hover_stabilize():
     linearization = LQRDynamicsLinearization(
         sample_rate=LINEARIZATION_RATE,
         params=LQRControllerParams.from_weights(
-            r_weights=5 * np.ones(3),
-            aa_weights=np.ones(3),
-            v_weights=np.ones(3),
-            omega_weights=np.ones(3),
-            collective_thrust_weight=1.0,
+            r_weights=np.ones(3),
+            aa_weights=10 * np.ones(3),
+            v_weights=0.1 * np.ones(3),
+            omega_weights=0.1 * np.array([10, 10, 100]),
+            collective_thrust_weight=0.1,
         ),
         rbd_params=rigid_body_params,
     )
@@ -108,7 +108,7 @@ def hover_stabilize():
         y0 = np.zeros(4),
         sample_rate=SW_SAMPLE_RATE,
         params=BodyrateControllerParams(
-            P = 10*np.eye(3),
+            P = 20 * np.eye(3),
         ),
         rbd_params=rigid_body_params,
     )
@@ -144,7 +144,7 @@ def hover_stabilize():
         ]
     )
 
-    t_range = [0, 5.0]
+    t_range = [0, 8.0]
     simulator = Simulator(model_graph, RK4(h=0.1))
 
     # Create visualization environment
@@ -203,7 +203,7 @@ def circle_follow():
 
     quadrotor = QuadrotorRigidBodyDynamics(
         y0=compose_state(
-            r_b0_N=curve.x(t_range[0]),
+            r_b0_N=curve.x(t_range[0]) + np.random.normal(loc=0.5, size=3),
             q_NB=sm.base.r2q(sm.base.rotz(0, "deg")),
         ),
         params=rigid_body_params,
@@ -229,9 +229,9 @@ def circle_follow():
         params=LQRControllerParams.from_weights(
             r_weights=np.ones(3),
             aa_weights=np.ones(3),
-            v_weights=np.ones(3),
+            v_weights=0.1 * np.ones(3),
             omega_weights=0.1 * np.ones(3),
-            collective_thrust_weight=0.1,
+            collective_thrust_weight=0.01,
         ),
         rbd_params=rigid_body_params,
     )
@@ -244,7 +244,7 @@ def circle_follow():
         y0 = np.zeros(4),
         sample_rate=SW_SAMPLE_RATE,
         params=BodyrateControllerParams(
-            P = 20 * np.eye(3),
+            P = 25 * np.eye(3),
         ),
         rbd_params=rigid_body_params,
     )
@@ -323,7 +323,7 @@ def circle_follow():
 
 
 if __name__ == "__main__":
-    # hover_stabilize()
-    circle_follow()
+    hover_stabilize()
+    # circle_follow()
     # point_stabilize()
     # path_follow()

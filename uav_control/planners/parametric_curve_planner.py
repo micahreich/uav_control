@@ -110,6 +110,8 @@ class QuadrotorParametricCurvePlanner(DiscreteTimeModel):
                 - The desired 1st-body-axis direction and its 1st, 2nd derivatives.
         """
 
+        t = t % self.curve.duration
+
         if t <= self.curve.duration:
             x = self.curve.x(t)
             v = self.curve.v(t)

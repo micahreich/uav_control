@@ -8,7 +8,8 @@ from hybrid_ode_sim.simulation.base import DiscreteTimeModel
 from hybrid_ode_sim.utils.logging_tools import LogLevel
 from numpy import cos, sin
 from spatialmath.base import (angvec2r, angvelxform, exp2r, norm, q2r, qconj,
-                              qnorm, qqmul, qvmul, r2q, r2x, skew, rotvelxform)
+                              qnorm, qqmul, qvmul, r2q, r2x, skew, rotvelxform,
+                              trlog, vex)
 
 import uav_control.constants as constants
 from uav_control.constants import (OMEGA_B0_B, OMEGA_B0_B_DIM, Q_NB, Q_NB_DIM,
@@ -106,7 +107,8 @@ class LQRDynamicsLinearization(DiscreteTimeModel):
 
         r_bar = r_b0_W - r_d0_W
         omega_bar = omega_b0_B - omega_d0_B
-        v_bar = v_b0_B - v_d0_B
+        # v_bar = v_b0_B - v_d0_B
+        v_bar = v_b0_W - v_d0_W
         phi_bar = r2x(R_WD.T @ R_WB, representation="exp")
 
         x_err = np.concatenate([r_bar, phi_bar, v_bar])
@@ -150,45 +152,76 @@ class LQRDynamicsLinearization(DiscreteTimeModel):
         """
 
         AA_DIM = 3
+        r_d0_W, q_WD, v_d0_W, _ = decompose_state(x0)
+        # r_b0_W, q_WB, v_b0_W, _ = decompose_state(x)
 
-        r_b0_W, q_WB, v_b0_W, omega_b0_B = decompose_state(x)
-        c_B, _ = decompose_control(u)
+        R_WD = q2r(q_WD)
+        phi_WD = vex(trlog(R_WD))
 
-        v_b0_B = qvmul(qconj(q_WB), v_b0_W)
+        c_D, omega_d0_B = decompose_control(u0)
+        # c_B, omega_b0_B = decompose_control(u)
 
-        R_WB = q2r(q_WB)
+        dr_dot__dr = np.zeros((R_B0_N_DIM, R_B0_N_DIM))
+        dr_dot__dphi = np.zeros((R_B0_N_DIM, AA_DIM))
+        dr_dot__dv = np.eye(3)
+        dr_dot__dc = np.zeros((R_B0_N_DIM, THRUST_DIM))
+        dr_dot__domega = np.zeros((R_B0_N_DIM, OMEGA_B0_B_DIM))
 
-        x_err, u_err = self.compute_reduced_error_state(x, x0, u, u0)
-        [r_err, phi_err, v_err], [c_err, omega_err] = self.decompose_reduced_error_state(x_err, u_err)
+        dphi_dot__dr = np.zeros((AA_DIM, R_B0_N_DIM))
+        dphi_dot__dphi = np.zeros((AA_DIM, AA_DIM))
+        dphi_dot__dv = np.zeros((AA_DIM, V_B0_N_DIM))
+        dphi_dot__dc = np.zeros((AA_DIM, THRUST_DIM))
+        dphi_dot__domega = np.eye(AA_DIM)
 
-        dr_err_dot__dr_err = np.zeros((R_B0_N_DIM, R_B0_N_DIM))
-        dr_err_dot__dphi_err = np.zeros((R_B0_N_DIM, AA_DIM))
-        dr_err_dot__dv_err = R_WB
-        dr_err_dot__dc_err = np.zeros((R_B0_N_DIM, THRUST_DIM))
-        dr_err_dot__domega_err = np.zeros((R_B0_N_DIM, OMEGA_B0_B_DIM))
+        dv_dot__dr = np.zeros((V_B0_N_DIM, R_B0_N_DIM))
 
-        dphi_err_dot__dr_err = np.zeros((AA_DIM, R_B0_N_DIM))
-        dphi_err_dot__dphi_err = np.zeros((AA_DIM, AA_DIM))
-        dphi_err_dot__dv_err = np.zeros((AA_DIM, V_B0_N_DIM))
-        dphi_err_dot__dc_err = np.zeros((AA_DIM, THRUST_DIM))
-        dphi_err_dot__domega_err = np.eye(AA_DIM)
+        if np.linalg.norm(phi_WD) > 1e-10:
+            dv_dot__dphi = 1/(self.rbd_params.m * np.linalg.norm(phi_WD) ** 2) * (
+                -R_WD @ skew(np.array([0, 0, c_D])) @ \
+                (
+                    np.outer(phi_WD, phi_WD) + \
+                    (R_WD.T - np.eye(3)) @ skew(phi_WD)
+                )
+            )
+        else:
+            print("AAAAAAH")
+            dv_dot__dphi = np.zeros((3, 3))
 
-        dv_err_dot__dr_err = np.zeros((V_B0_N_DIM, R_B0_N_DIM))
-        dv_err_dot__dphi_err = 1/self.rbd_params.m * (-skew(e3 * c_B) + skew(e3 * c_err))
-        dv_err_dot__dv_err = -skew(omega_b0_B) + skew(omega_err)
-        dv_err_dot__dc_err = (1/self.rbd_params.m * (e3 - skew(phi_err) @ e3)).reshape((-1, 1))
-        dv_err_dot__domega_err = skew(v_b0_B) -skew(v_err)
+        dv_dot__dv = np.zeros((V_B0_N_DIM, V_B0_N_DIM))
+        dv_dot__dc = (1/self.rbd_params.m * R_WD @ e3).reshape((-1, 1))
+        dv_dot__domega = np.zeros((V_B0_N_DIM, OMEGA_B0_B_DIM))
+
+        # x_err, u_err = self.compute_reduced_error_state(x, x0, u, u0)
+        # [r_err, phi_err, v_err], [c_err, omega_err] = self.decompose_reduced_error_state(x_err, u_err)
+
+        # dr_err_dot__dr_err = np.zeros((R_B0_N_DIM, R_B0_N_DIM))
+        # dr_err_dot__dphi_err = np.zeros((R_B0_N_DIM, AA_DIM))
+        # dr_err_dot__dv_err = R_WB
+        # dr_err_dot__dc_err = np.zeros((R_B0_N_DIM, THRUST_DIM))
+        # dr_err_dot__domega_err = np.zeros((R_B0_N_DIM, OMEGA_B0_B_DIM))
+
+        # dphi_err_dot__dr_err = np.zeros((AA_DIM, R_B0_N_DIM))
+        # dphi_err_dot__dphi_err = np.zeros((AA_DIM, AA_DIM))
+        # dphi_err_dot__dv_err = np.zeros((AA_DIM, V_B0_N_DIM))
+        # dphi_err_dot__dc_err = np.zeros((AA_DIM, THRUST_DIM))
+        # dphi_err_dot__domega_err = np.eye(AA_DIM)
+
+        # dv_err_dot__dr_err = np.zeros((V_B0_N_DIM, R_B0_N_DIM))
+        # dv_err_dot__dphi_err = 1/self.rbd_params.m * (-skew(e3 * c_B) + skew(e3 * c_err))
+        # dv_err_dot__dv_err = -skew(omega_b0_B) + skew(omega_err)
+        # dv_err_dot__dc_err = (1/self.rbd_params.m * (e3 - skew(phi_err) @ e3)).reshape((-1, 1))
+        # dv_err_dot__domega_err = skew(v_b0_B) -skew(v_err)
 
         A = np.block([
-            [dr_err_dot__dr_err, dr_err_dot__dphi_err, dr_err_dot__dv_err],
-            [dphi_err_dot__dr_err, dphi_err_dot__dphi_err, dphi_err_dot__dv_err],
-            [dv_err_dot__dr_err, dv_err_dot__dphi_err, dv_err_dot__dv_err]
+            [dr_dot__dr, dr_dot__dphi, dr_dot__dv],
+            [dphi_dot__dr, dphi_dot__dphi, dphi_dot__dv],
+            [dv_dot__dr, dv_dot__dphi, dv_dot__dv]
         ])
 
         B = np.block([
-            [dr_err_dot__dc_err, dr_err_dot__domega_err],
-            [dphi_err_dot__dc_err, dphi_err_dot__domega_err],
-            [dv_err_dot__dc_err, dv_err_dot__domega_err]
+            [dr_dot__dc, dr_dot__domega],
+            [dphi_dot__dc, dphi_dot__domega],
+            [dv_dot__dc, dv_dot__domega]
         ])
 
 
