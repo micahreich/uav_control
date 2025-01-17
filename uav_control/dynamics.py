@@ -39,14 +39,6 @@ class QuadrotorRigidBodyParams:
         self.I_inv = np.linalg.inv(self.I)
 
 
-@dataclass
-class QuadrotorLinearization:
-    Jx: np.ndarray = field(default_factory=lambda: np.zeros(shape=(nx, nx)))  # A matrix
-    Ju: np.ndarray = field(default_factory=lambda: np.zeros(shape=(nx, nu)))  # B matrix
-    x0: np.ndarray = field(default_factory=lambda: np.zeros(shape=(nx,)))  # linearization state
-    u0: np.ndarray = field(default_factory=lambda: np.zeros(shape=(nu,)))  # linearization control
-
-
 class QuadrotorRigidBodyDynamics(ContinuousTimeModel):
     def __init__(
         self,
@@ -137,13 +129,22 @@ class QuadrotorRigidBodyDynamics(ContinuousTimeModel):
             allocated_wrench = np.zeros(4)
 
         decomposed_state = decompose_state(y)
+        [_, q_NB, _, omega_b0_B] = decomposed_state
+
         collective_thrust, torque = decompose_control(allocated_wrench)
+
+        disturbance_force_N, disturbance_torque_B = np.zeros(3), np.zeros(3)
+
+        if "disturbance_wrench" in self.input_models:
+            disturbance_force_N, disturbance_torque_N = self.input_models["disturbance_wrench"].y
+            disturbance_torque_B = qvmul(qconj(q_NB), disturbance_torque_N)
 
         return compose_state_dot(
             v_b0_N=self.compute_v_b0_N(decomposed_state),
             q_NB_dot=self.compute_q_NB_dot(decomposed_state),
-            a_b0_N=self.compute_a_b0_N(decomposed_state, collective_thrust),
-            omega_b0_B_dot=self.compute_omega_b0_B_dot(decomposed_state, torque),
+            a_b0_N=self.compute_a_b0_N(decomposed_state, collective_thrust) + \
+                   1/self.params.m * disturbance_force_N,
+            omega_b0_B_dot=self.compute_omega_b0_B_dot(decomposed_state, torque + disturbance_torque_B)
         )
 
     def history_interpolator(self, t):
@@ -401,7 +402,27 @@ class QuadrotorRigidBodyDynamics(ContinuousTimeModel):
         rot_ND_ddot = np.column_stack((b_1c_ddot, b_2c_ddot, b_3c_ddot))
         omega_d0_D_dot = vee(rot_ND.T @ rot_ND_ddot - omega_d0_D_skewa @ omega_d0_D_skewa)
 
-        # Compute desired/commanded torque (expressed in the desired frame)
-        tau_d0_D = self.params.I @ omega_d0_D_dot + np.cross(omega_d0_D, self.params.I @ omega_d0_D)
+        # # Compute desired/commanded torque (expressed in the desired frame)
+        # tau_d0_D = self.params.I @ omega_d0_D_dot + np.cross(omega_d0_D, self.params.I @ omega_d0_D)
 
-        return [r_b0_N_ref, v_b0_N_ref, rot_ND, omega_d0_D], [f_des, tau_d0_D]
+        return [r_b0_N_ref, v_b0_N_ref, rot_ND, omega_d0_D], [f_des, omega_d0_D_dot]
+
+
+@dataclass
+class QuadrotorDisturbanceWrenchParams:
+    force_N: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    torque_N: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    active_interval: float = (-np.inf, np.inf)
+
+class QuadrotorDisturbanceWrench(DiscreteTimeModel):
+    def __init__(self, sample_rate,
+                 name: str = "disturbance_wrench",
+                 params=QuadrotorDisturbanceWrenchParams(),
+                 logging_level=LogLevel.ERROR):
+        super().__init__((np.zeros(3), np.zeros(3)), sample_rate, name, params, logging_level)
+
+    def discrete_dynamics(self, t: float, y) -> Tuple[np.ndarray, np.ndarray]:
+        if self.params.active_interval[0] <= t <= self.params.active_interval[1]:
+            return self.params.force_N, self.params.torque_N
+        else:
+            return np.zeros(3), np.zeros(3)

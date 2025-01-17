@@ -61,7 +61,7 @@ class DifferentialFlatnessPlanner(DiscreteTimeModel):
 
         [r_d0_N, v_d0_N, rot_ND, omega_d0_D], [
             f_cmd,
-            tau_d0_D,
+            omega_d0_D_dot,
         ] = dynamics.compute_differential_flatness_states_controls(
             r_b0_N_ref,
             v_b0_N_ref,
@@ -73,17 +73,19 @@ class DifferentialFlatnessPlanner(DiscreteTimeModel):
             b_1d_ddot,
         )
 
+        # Project desired thrust vector onto current body z-axis to get desired collective thrust magnitude
+        f_app = np.dot(f_cmd, rot_NB[:, 2])
+
+        # Combine orientation, angular velocity errors + ff to get desired torque
         rot_BD = rot_NB.T @ rot_ND
-
-        # Desired thrust along body frame b3 axis
-        b_3 = rot_NB[:, 2]
-        thrust_d = np.dot(f_cmd, b_3)
-
-        # Desired angular velocity (in body frame)
         omega_d0_B = rot_BD @ omega_d0_D
 
+        # Time derivative of the desired angular velocity in B frame, due to Transport Theorem
+        omega_db_B = omega_d0_B - omega_b0_B
+        omega_d0_B_dot = rot_BD @ omega_d0_D_dot + np.cross(omega_db_B, omega_d0_B)
+
         # Desired torque (in body frame)
-        tau_d0_B = rot_BD @ tau_d0_D
+        tau_d0_B = dynamics.params.I @ omega_d0_B_dot + np.cross(omega_d0_B, dynamics.params.I @ omega_d0_B)
 
         desired_state = compose_state(
             r_b0_N=r_d0_N,
@@ -93,7 +95,7 @@ class DifferentialFlatnessPlanner(DiscreteTimeModel):
         )
 
         desired_control = compose_control(
-            c=thrust_d,
+            c=f_app,
             tau_b0_B=tau_d0_B,
         )
 

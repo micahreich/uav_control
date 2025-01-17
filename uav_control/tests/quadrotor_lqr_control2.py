@@ -20,7 +20,9 @@ from uav_control.controllers.lqr_controller import (LQRController,
                                                     BodyrateController,
                                                     BodyrateControllerParams)
 from uav_control.dynamics import (QuadrotorRigidBodyDynamics,
-                                  QuadrotorRigidBodyParams)
+                                  QuadrotorRigidBodyParams,
+                                  QuadrotorDisturbanceWrench,
+                                  QuadrotorDisturbanceWrenchParams)
 from uav_control.planners.differential_flatness_planner import \
     DifferentialFlatnessPlanner
 from uav_control.planners.parametric_curve_planner import ParametricCircle, QuadrotorParametricCurvePlanner
@@ -54,7 +56,7 @@ def hover_stabilize():
         sample_rate=10,
         params=QuadrotorStabilizationPlannerParams(
             position=np.array([0.0, 0.0, 1.0]),
-            b1d=np.array([0.0, 1.0, 0.0])
+            b1d=np.array([1.0, 0.0, 0.0])
         ),
     )
 
@@ -65,14 +67,24 @@ def hover_stabilize():
 
     rigid_body_params = QuadrotorRigidBodyParams(m=M, I=I, D_drag=D_drag)
 
+    # Create quadrotor and disturbance
     quadrotor = QuadrotorRigidBodyDynamics(
         y0=compose_state(
             r_b0_N=np.array([0.0, 0.0, 1.0]),
-            q_NB=sm.base.r2q(sm.base.rotx(89, "deg")),
+            q_NB=sm.base.r2q(sm.base.rotx(15, "deg")),
         ),
         params=rigid_body_params,
         logging_level=LogLevel.ERROR,
         noise_y0=True,
+    )
+
+    disturbance = QuadrotorDisturbanceWrench(
+        sample_rate=SW_SAMPLE_RATE,
+        params=QuadrotorDisturbanceWrenchParams(
+            force_N=np.array([5.0, 2.0, -2.0]),
+            torque_N=np.zeros(3),
+            active_interval=(2.0, 2.5)
+        ),
     )
 
     # Create motor allocator
@@ -97,7 +109,6 @@ def hover_stabilize():
             omega_weights=0.1 * np.array([10, 10, 100]),
             collective_thrust_weight=0.1,
         ),
-        rbd_params=rigid_body_params,
     )
 
     lqr_controller = LQRController(
@@ -110,7 +121,6 @@ def hover_stabilize():
         params=BodyrateControllerParams(
             P = 20 * np.eye(3),
         ),
-        rbd_params=rigid_body_params,
     )
 
     # Create simulator
@@ -120,6 +130,7 @@ def hover_stabilize():
     lqr_controller.inputs_to(bodyrate_controller)
     bodyrate_controller.inputs_to(allocator)
     allocator.inputs_to(quadrotor)
+    disturbance.inputs_to(quadrotor)
 
     dfb_planner.feedback_from(quadrotor)
 
@@ -141,6 +152,7 @@ def hover_stabilize():
             bodyrate_controller,
             allocator,
             quadrotor,
+            disturbance
         ]
     )
 
@@ -167,6 +179,7 @@ def hover_stabilize():
         .attach_element(
             TraveledPathElement(
                 system=quadrotor,
+                linewidth=2.0
             )
         )
     )
@@ -203,7 +216,7 @@ def circle_follow():
 
     quadrotor = QuadrotorRigidBodyDynamics(
         y0=compose_state(
-            r_b0_N=curve.x(t_range[0]) + np.random.normal(loc=0.5, size=3),
+            r_b0_N=curve.x(t_range[0]), #+ np.random.normal(loc=0.5, size=3),
             q_NB=sm.base.r2q(sm.base.rotz(0, "deg")),
         ),
         params=rigid_body_params,
@@ -233,7 +246,6 @@ def circle_follow():
             omega_weights=0.1 * np.ones(3),
             collective_thrust_weight=0.01,
         ),
-        rbd_params=rigid_body_params,
     )
 
     lqr_controller = LQRController(
@@ -246,7 +258,6 @@ def circle_follow():
         params=BodyrateControllerParams(
             P = 25 * np.eye(3),
         ),
-        rbd_params=rigid_body_params,
     )
 
     # Create simulator
@@ -325,5 +336,3 @@ def circle_follow():
 if __name__ == "__main__":
     hover_stabilize()
     # circle_follow()
-    # point_stabilize()
-    # path_follow()

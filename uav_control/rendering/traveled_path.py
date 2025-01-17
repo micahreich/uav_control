@@ -15,13 +15,14 @@ from uav_control.constants import compose_state, decompose_state
 
 class TraveledPathElement(PlotElement):
     def __init__(
-        self, system: BaseModel, color="blue", alpha=0.5, env: Optional[PlotEnvironment] = None
+        self, system: BaseModel, color="blue", alpha=0.5, linewidth=1, env: Optional[PlotEnvironment] = None
     ):
         super().__init__(env, logging_level=LogLevel.ERROR)
 
         self.system = system
         self.color = color
         self.alpha = alpha
+        self.linewidth = linewidth
 
         _, _, self.history = system.history()
 
@@ -29,7 +30,7 @@ class TraveledPathElement(PlotElement):
         super().init_environment(env)
 
         (self.trail_plot,) = self.env.ax.plot(
-            [], [], [], linewidth=1, color=self.color, alpha=self.alpha
+            [], [], [], linewidth=self.linewidth, color=self.color, alpha=self.alpha
         )
         self.x_history, self.y_history, self.z_history = [], [], []
 

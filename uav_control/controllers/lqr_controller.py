@@ -82,46 +82,40 @@ class LQRDynamicsLinearization(DiscreteTimeModel):
         self,
         sample_rate: int,
         params: LQRControllerParams,
-        rbd_params: QuadrotorRigidBodyParams,
         y0=None,
         name: str = "lqr_linearization",
         planner_name: str = "dfb_planner",
     ):
         super().__init__(y0, sample_rate, name, params)
-        self.rbd_params = rbd_params
         self.planner_name = planner_name
 
     @staticmethod
-    def compute_reduced_error_state(x, x0, u, u0) -> np.ndarray:
+    def compute_reduced_error_state(x, x0, u, u0) -> Tuple[np.ndarray, np.ndarray]:
         r_d0_W, q_WD, v_d0_W, omega_d0_B = decompose_state(x0)
         r_b0_W, q_WB, v_b0_W, omega_b0_B = decompose_state(x)
 
         c_D, _ = decompose_control(u0)
         c_B, _ = decompose_control(u)
 
-        v_d0_B = qvmul(qconj(q_WB), v_d0_W)
-        v_b0_B = qvmul(qconj(q_WB), v_b0_W)
+        delta_p = r_b0_W - r_d0_W
+        delta_R = q2r(qqmul(qconj(q_WD), q_WB))
+        delta_theta = r2x(delta_R, representation="exp")
+        delta_v = v_b0_W - v_d0_W
 
-        R_WD = q2r(q_WD)
-        R_WB = q2r(q_WB)
+        delta_omega = omega_b0_B - omega_d0_B
+        delta_c = c_B - c_D
 
-        r_bar = r_b0_W - r_d0_W
-        omega_bar = omega_b0_B - omega_d0_B
-        # v_bar = v_b0_B - v_d0_B
-        v_bar = v_b0_W - v_d0_W
-        phi_bar = r2x(R_WD.T @ R_WB, representation="exp")
+        delta_x = np.concatenate([delta_p, delta_theta, delta_v])
+        delta_u = np.concatenate([[delta_c], delta_omega])
 
-        x_err = np.concatenate([r_bar, phi_bar, v_bar])
-        u_err = np.concatenate([[c_B - c_D], omega_bar])
-
-        return x_err, u_err
+        return delta_x, delta_u
 
     @staticmethod
     def decompose_reduced_error_state(x_err, u_err) -> Tuple[np.ndarray, np.ndarray]:
-        r_err, phi_err, v_err = x_err[:3], x_err[3:6], x_err[6:9]
+        p_err, theta_err, v_err = x_err[:3], x_err[3:6], x_err[6:9]
         c_err, omega_err = u_err[:1], u_err[1:]
 
-        return [r_err, phi_err, v_err], [c_err, omega_err]
+        return [p_err, theta_err, v_err], [c_err, omega_err]
 
     def _linearize_dynamics(self, x, x0, u, u0) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -151,174 +145,55 @@ class LQRDynamicsLinearization(DiscreteTimeModel):
               to the control input vector.
         """
 
-        AA_DIM = 3
-        r_d0_W, q_WD, v_d0_W, _ = decompose_state(x0)
-        # r_b0_W, q_WB, v_b0_W, _ = decompose_state(x)
+        THETA_DIM = 3
+        r_d0_W, q_WD, v_d0_W, omega_d0_B = decompose_state(x0)
+        c_D, _ = decompose_control(u0)
 
         R_WD = q2r(q_WD)
-        phi_WD = vex(trlog(R_WD))
+        I = np.eye(3)
 
-        c_D, omega_d0_B = decompose_control(u0)
-        # c_B, omega_b0_B = decompose_control(u)
+        dynamics = self.input_models["quadrotor_state"]
+        m = dynamics.params.m
 
-        dr_dot__dr = np.zeros((R_B0_N_DIM, R_B0_N_DIM))
-        dr_dot__dphi = np.zeros((R_B0_N_DIM, AA_DIM))
-        dr_dot__dv = np.eye(3)
-        dr_dot__dc = np.zeros((R_B0_N_DIM, THRUST_DIM))
-        dr_dot__domega = np.zeros((R_B0_N_DIM, OMEGA_B0_B_DIM))
-
-        dphi_dot__dr = np.zeros((AA_DIM, R_B0_N_DIM))
-        dphi_dot__dphi = np.zeros((AA_DIM, AA_DIM))
-        dphi_dot__dv = np.zeros((AA_DIM, V_B0_N_DIM))
-        dphi_dot__dc = np.zeros((AA_DIM, THRUST_DIM))
-        dphi_dot__domega = np.eye(AA_DIM)
-
-        dv_dot__dr = np.zeros((V_B0_N_DIM, R_B0_N_DIM))
-
-        if np.linalg.norm(phi_WD) > 1e-10:
-            dv_dot__dphi = 1/(self.rbd_params.m * np.linalg.norm(phi_WD) ** 2) * (
-                -R_WD @ skew(np.array([0, 0, c_D])) @ \
-                (
-                    np.outer(phi_WD, phi_WD) + \
-                    (R_WD.T - np.eye(3)) @ skew(phi_WD)
-                )
+        [delta_p, delta_theta, delta_v], [delta_c, delta_omega] = \
+            self.decompose_reduced_error_state(
+                *self.compute_reduced_error_state(x, x0, u, u0)
             )
-        else:
-            print("AAAAAAH")
-            dv_dot__dphi = np.zeros((3, 3))
 
-        dv_dot__dv = np.zeros((V_B0_N_DIM, V_B0_N_DIM))
-        dv_dot__dc = (1/self.rbd_params.m * R_WD @ e3).reshape((-1, 1))
-        dv_dot__domega = np.zeros((V_B0_N_DIM, OMEGA_B0_B_DIM))
+        # fmt: off
 
-        # x_err, u_err = self.compute_reduced_error_state(x, x0, u, u0)
-        # [r_err, phi_err, v_err], [c_err, omega_err] = self.decompose_reduced_error_state(x_err, u_err)
+        dp_err_dot__dp_err = np.zeros(shape=(R_B0_N_DIM, R_B0_N_DIM))
+        dp_err_dot__dtheta_err = np.zeros(shape=(R_B0_N_DIM, THETA_DIM))
+        dp_err_dot__dv_err = I
 
-        # dr_err_dot__dr_err = np.zeros((R_B0_N_DIM, R_B0_N_DIM))
-        # dr_err_dot__dphi_err = np.zeros((R_B0_N_DIM, AA_DIM))
-        # dr_err_dot__dv_err = R_WB
-        # dr_err_dot__dc_err = np.zeros((R_B0_N_DIM, THRUST_DIM))
-        # dr_err_dot__domega_err = np.zeros((R_B0_N_DIM, OMEGA_B0_B_DIM))
+        dtheta_err_dot__dp_err = np.zeros(shape=(THETA_DIM, R_B0_N_DIM))
+        dtheta_err_dot__dtheta_err = -1/2 * skew(delta_omega)
+        dtheta_err_dot__dv_err = np.zeros(shape=(THETA_DIM, V_B0_N_DIM))
 
-        # dphi_err_dot__dr_err = np.zeros((AA_DIM, R_B0_N_DIM))
-        # dphi_err_dot__dphi_err = np.zeros((AA_DIM, AA_DIM))
-        # dphi_err_dot__dv_err = np.zeros((AA_DIM, V_B0_N_DIM))
-        # dphi_err_dot__dc_err = np.zeros((AA_DIM, THRUST_DIM))
-        # dphi_err_dot__domega_err = np.eye(AA_DIM)
+        dv_err_dot__dp_err = np.zeros(shape=(V_B0_N_DIM, R_B0_N_DIM))
+        dv_err_dot__dtheta_err = -1/m * R_WD @ skew(e3 * c_D + delta_c)
+        dv_err_dot__dv_err = np.zeros(shape=(V_B0_N_DIM, V_B0_N_DIM))
 
-        # dv_err_dot__dr_err = np.zeros((V_B0_N_DIM, R_B0_N_DIM))
-        # dv_err_dot__dphi_err = 1/self.rbd_params.m * (-skew(e3 * c_B) + skew(e3 * c_err))
-        # dv_err_dot__dv_err = -skew(omega_b0_B) + skew(omega_err)
-        # dv_err_dot__dc_err = (1/self.rbd_params.m * (e3 - skew(phi_err) @ e3)).reshape((-1, 1))
-        # dv_err_dot__domega_err = skew(v_b0_B) -skew(v_err)
+        dp_err_dot__dc_err = np.zeros(shape=(R_B0_N_DIM, THRUST_DIM))
+        dp_err_dot__domega_err = np.zeros(shape=(R_B0_N_DIM, OMEGA_B0_B_DIM))
+
+        dtheta_err_dot__dc_err = np.zeros(shape=(THETA_DIM, THRUST_DIM))
+        dtheta_err_dot__domega_err = I + 1/2 * skew(delta_theta)
+
+        dv_err_dot__dc_err = (1/m * R_WD @ (I + skew(delta_theta)) @ e3).reshape((-1, 1))
+        dv_err_dot__domega_err = np.zeros(shape=(V_B0_N_DIM, OMEGA_B0_B_DIM))
 
         A = np.block([
-            [dr_dot__dr, dr_dot__dphi, dr_dot__dv],
-            [dphi_dot__dr, dphi_dot__dphi, dphi_dot__dv],
-            [dv_dot__dr, dv_dot__dphi, dv_dot__dv]
+            [dp_err_dot__dp_err, dp_err_dot__dtheta_err, dp_err_dot__dv_err],
+            [dtheta_err_dot__dp_err, dtheta_err_dot__dtheta_err, dtheta_err_dot__dv_err],
+            [dv_err_dot__dp_err, dv_err_dot__dtheta_err, dv_err_dot__dv_err]
         ])
 
         B = np.block([
-            [dr_dot__dc, dr_dot__domega],
-            [dphi_dot__dc, dphi_dot__domega],
-            [dv_dot__dc, dv_dot__domega]
+            [dp_err_dot__dc_err, dp_err_dot__domega_err],
+            [dtheta_err_dot__dc_err, dtheta_err_dot__domega_err],
+            [dv_err_dot__dc_err, dv_err_dot__domega_err]
         ])
-
-
-
-        # # We write the dynamics in the form xdot = f(x, u) and linearize around the operating point (x0, u0)
-        # # To avoid the issues that come with the unit quaternion being a redundant repsentation, we write the dynamics
-        # # using axis-angle representation for the attitude part of the state
-
-        # # fmt: off
-
-        # # Compute derivative of \dot{r} with respect to states
-        # drdot_dr = np.zeros((R_B0_N_DIM, R_B0_N_DIM))
-        # drdot_daa = np.zeros((R_B0_N_DIM, AA_DIM))
-        # drdot_dv = np.eye(R_B0_N_DIM)
-        # drdor_domega= np.zeros((R_B0_N_DIM, OMEGA_B0_B_DIM))
-
-        # # Compute derivative of \dot{aa} with respect to states
-        # daadot_dr = np.zeros((AA_DIM, R_B0_N_DIM))
-        # daadot_daa = np.zeros((AA_DIM, AA_DIM))
-        # daadot_dv = np.zeros((AA_DIM, V_B0_N_DIM))
-        # daa_domega = np.eye(AA_DIM) #rotvelxform(aa, inverse=True, representation="exp") @ rot_NB
-
-        # #np.eye(AA_DIM)  # This is an approximation which holds for small angles
-
-        # # Compute derivative of \dot{v} with respect to states
-        # dvdot_dr = np.zeros((V_B0_N_DIM, R_B0_N_DIM))
-
-        # # See A compact formula for the derivative of a 3-D rotation in exponential coordinate
-        # # https://arxiv.org/pdf/1312.0788v1
-
-        # c_B = collective_thrust * e3
-
-        # dc_W_daa = -rot_NB @ skew(c_B) @ (np.outer(aa, aa) + (rot_NB.T - np.eye(3)) @ skew(aa)) / aa_norm**2
-
-        # dvdot_daa = 1/self.rbd_params.m * dc_W_daa
-
-        # dvdot_dv = np.zeros((V_B0_N_DIM, V_B0_N_DIM))  # TODO: implement this jacobian for linear drag
-        # dvdot_domega = np.zeros((V_B0_N_DIM, OMEGA_B0_B_DIM))
-
-        # # Compute derivative of \dot{omega} with respect to states
-        # domegadot_dr = np.zeros((OMEGA_B0_B_DIM, R_B0_N_DIM))
-        # domegadot_daa = np.zeros((OMEGA_B0_B_DIM, AA_DIM))
-        # domegadot_dv = np.zeros((OMEGA_B0_B_DIM, V_B0_N_DIM))
-        # domegadot_domega = self.rbd_params.I_inv @ (
-        #     skew(self.rbd_params.I @ omega_b0_B) - skew(omega_b0_B) @ self.rbd_params.I
-        # )
-
-        # # print("domegadot_domega delta:", np.linalg.norm(domegadot_domega - ))
-
-        # A = np.block([
-        #     [drdot_dr, drdot_daa, drdot_dv, drdor_domega],
-        #     [daadot_dr, daadot_daa, daadot_dv, daa_domega],
-        #     [dvdot_dr, dvdot_daa, dvdot_dv, dvdot_domega],
-        #     [domegadot_dr, domegadot_daa, domegadot_dv, domegadot_domega]
-        # ])
-
-        # if self.y is not None:
-        #     A_prev = self.y.Jx
-        #     A_diff = A - A_prev
-
-        #     if np.linalg.norm(A_diff) > 10:
-        #         print(f"A_diff ({np.linalg.norm(A_diff)}): ", A_diff[6:9, 3:6], np.linalg.norm(A_diff[6:9, 3:6]))
-        #         print(f"aa_norm: {aa_norm}")
-
-        #         x_diff = x0 - self.y.x0
-        #         u_diff = u0 - self.y.u0
-
-        #         print(f"x_diff: {np.linalg.norm(x_diff)}")
-        #         print(f"u_diff: {u_diff}")
-
-        # # Compute derivative of \dot{r} with respect to controls
-        # drdot_dc = np.zeros((R_B0_N_DIM, THRUST_DIM))
-        # drdot_dtau = np.zeros((R_B0_N_DIM, TAU_B0_B_DIM))
-
-        # # Compute derivative of \dot{aa} with respect to controls
-        # daadot_dc = np.zeros((AA_DIM, THRUST_DIM))
-        # daadot_dtau = np.zeros((AA_DIM, TAU_B0_B_DIM))
-
-        # # Compute derivative of \dot{v} with respect to controls
-        # dc_W_dc = rot_NB[:, 2].reshape((-1, 1))  # (3 x 1) jacobian
-        # dvdot_dc = 1/self.rbd_params.m * dc_W_dc
-
-        # dvdot_dtau = np.zeros((V_B0_N_DIM, TAU_B0_B_DIM))
-
-        # # Compute derivative of \dot{omega} with respect to controls
-        # domegadot_dc = np.zeros((OMEGA_B0_B_DIM, THRUST_DIM))
-        # domegadot_dtau = self.rbd_params.I_inv
-
-        # B = np.block([
-        #     [drdot_dc, drdot_dtau],
-        #     [daadot_dc, daadot_dtau],
-        #     [dvdot_dc, dvdot_dtau],
-        #     [domegadot_dc, domegadot_dtau]
-        # ])
-
-        # assert A.shape == (nx, nx)
-        # assert B.shape == (nx, nu)
 
         # fmt: on
 
@@ -327,23 +202,12 @@ class LQRDynamicsLinearization(DiscreteTimeModel):
     def discrete_dynamics(self, t: float, y: Any) -> Any:
         curr_state = self.input_models["quadrotor_state"].y
         curr_control = self.input_models["controller"].y
+
         desired_state, desired_control = self.input_models[self.planner_name].y
 
         A, B = self._linearize_dynamics(curr_state, desired_state, curr_control, desired_control)
-
         P = sp.linalg.solve_continuous_are(A, B, self.params.Q, self.params.R)
         K = self.params.R_inv @ B.T @ P
-
-        # if self.y is not None:
-        #     Kdiff = K - self.y.K
-        #     Adiff = A - self.y.Jx
-        #     Bdiff = B - self.y.Ju
-
-        #     # print("Kdiff: ", np.linalg.norm(Kdiff))
-        #     # print("Adiff: ", np.linalg.norm(Adiff))
-        #     # print("Bdiff: ", np.linalg.norm(Bdiff))
-
-        # assert K.shape == (4, 3 * 4)
 
         y = LQRGainSolverState(
             Jx=A,
@@ -367,15 +231,17 @@ class LQRController(DiscreteTimeModel):
     def discrete_dynamics(self, t: float, y: Any) -> Any:
         curr_state = self.input_models["quadrotor_state"].y
         lqr_gains: LQRGainSolverState = self.input_models["lqr_linearization"].y
+        nominal_control = lqr_gains.u0
 
-        x_err, _ = LQRDynamicsLinearization.compute_reduced_error_state(curr_state, lqr_gains.x0, y, lqr_gains.u0)
+        curr_delta_x, _ = LQRDynamicsLinearization.compute_reduced_error_state(curr_state, lqr_gains.x0, y, lqr_gains.u0)
 
-        reduced_lqr_u0 = np.concatenate([
-            [lqr_gains.u0[0]], # c_D
-            lqr_gains.x0[OMEGA_B0_B]
-        ])
+        r_d0_W, q_WD, v_d0_W, omega_d0_B = decompose_state(lqr_gains.x0)
+        c_D, _ = decompose_control(lqr_gains.u0)
+        nominal_control = np.concatenate([[c_D], omega_d0_B])
 
-        u_lqr = reduced_lqr_u0 - lqr_gains.K @ x_err
+        delta_u_lqr = -lqr_gains.K @ curr_delta_x
+        u_lqr = delta_u_lqr + nominal_control
+
         return u_lqr
 
 
@@ -447,16 +313,15 @@ class BodyrateController(DiscreteTimeModel):
         y0: Any,
         sample_rate: int,
         params: BodyrateControllerParams,
-        rbd_params: QuadrotorRigidBodyParams,
         logging_level=LogLevel.ERROR,
     ):
         super().__init__(y0, sample_rate, "controller", params, logging_level)
-        self.rbd_params = rbd_params
 
     def discrete_dynamics(self, _t: float, _y: Any) -> Any:
         lqr_control = self.input_models["lqr_controller"].y
-        curr_state = self.input_models["quadrotor_state"].y
+        dynamics = self.input_models["quadrotor_state"]
 
+        curr_state = dynamics.y
         _r_b0_N, _q_NB, _v_b0_N, omega_b0_B = decompose_state(curr_state)
 
         collective_thrust_c, omega_c0_B = lqr_control[0], lqr_control[1:4]
@@ -464,8 +329,8 @@ class BodyrateController(DiscreteTimeModel):
         omega_c0_B_dot = -self.params.P @ (omega_b0_B - omega_c0_B)
 
         # Low-level bodyrate controller to track desired angular velocities, feedback linearization
-        control_wrench = self.rbd_params.I @ omega_c0_B_dot + np.cross(
-            omega_b0_B, self.rbd_params.I @ omega_b0_B
+        control_wrench = dynamics.params.I @ omega_c0_B_dot + np.cross(
+            omega_b0_B, dynamics.params.I @ omega_b0_B
         )
 
         return np.concatenate([[collective_thrust_c], control_wrench])
