@@ -55,7 +55,7 @@ def hover_stabilize():
         y0=0,
         sample_rate=10,
         params=QuadrotorStabilizationPlannerParams(
-            position=np.array([0.0, 0.0, 1.0]),
+            position=np.array([2.0, 1.0, 0.0]),
             b1d=np.array([1.0, 0.0, 0.0])
         ),
     )
@@ -71,7 +71,7 @@ def hover_stabilize():
     quadrotor = QuadrotorRigidBodyDynamics(
         y0=compose_state(
             r_b0_N=np.array([0.0, 0.0, 1.0]),
-            q_NB=sm.base.r2q(sm.base.rotx(15, "deg")),
+            q_NB=sm.base.r2q(sm.base.rotx(20, "deg")),
         ),
         params=rigid_body_params,
         logging_level=LogLevel.ERROR,
@@ -81,7 +81,7 @@ def hover_stabilize():
     disturbance = QuadrotorDisturbanceWrench(
         sample_rate=SW_SAMPLE_RATE,
         params=QuadrotorDisturbanceWrenchParams(
-            force_N=np.array([5.0, 2.0, -2.0]),
+            force_N=np.array([5.0, 0.0, 0.0]),
             torque_N=np.zeros(3),
             active_interval=(2.0, 2.5)
         ),
@@ -103,8 +103,8 @@ def hover_stabilize():
     linearization = LQRDynamicsLinearization(
         sample_rate=LINEARIZATION_RATE,
         params=LQRControllerParams.from_weights(
-            r_weights=np.ones(3),
-            aa_weights=10 * np.ones(3),
+            r_weights=10 * np.ones(3),
+            aa_weights=np.ones(3),
             v_weights=0.1 * np.ones(3),
             omega_weights=0.1 * np.array([10, 10, 100]),
             collective_thrust_weight=0.1,
@@ -152,7 +152,7 @@ def hover_stabilize():
             bodyrate_controller,
             allocator,
             quadrotor,
-            disturbance
+            # disturbance
         ]
     )
 
@@ -179,7 +179,7 @@ def hover_stabilize():
         .attach_element(
             TraveledPathElement(
                 system=quadrotor,
-                linewidth=2.0
+                linewidth=1.0
             )
         )
     )
